@@ -39,10 +39,10 @@ class crobat(BaseModule):
         return True
 
     def already_processed(self, hostname):
-        for parent in self.helpers.domain_parents(hostname, include_self=True):
-            if hash(parent) in self.processed:
-                return True
-        return False
+        return any(
+            hash(parent) in self.processed
+            for parent in self.helpers.domain_parents(hostname, include_self=True)
+        )
 
     def abort_if(self, event):
         # this helps weed out unwanted results when scanning IP_RANGES and wildcard domains
@@ -50,10 +50,9 @@ class crobat(BaseModule):
 
     def handle_event(self, event):
         query = self.make_query(event)
-        results = self.query(query)
-        if results:
+        if results := self.query(query):
             for hostname in results:
-                if not hostname == event:
+                if hostname != event:
                     self.emit_event(hostname, "DNS_NAME", event, abort_if=self.abort_if)
 
     def request_url(self, query):
@@ -67,15 +66,12 @@ class crobat(BaseModule):
             return self.helpers.parent_domain(event.data).lower()
 
     def parse_results(self, r, query=None):
-        json = r.json()
-        if json:
-            for hostname in json:
-                yield hostname
+        if json := r.json():
+            yield from json
 
     def query(self, query):
         try:
-            results = list(self.parse_results(self.request_url(query), query))
-            if results:
+            if results := list(self.parse_results(self.request_url(query), query)):
                 return results
             self.debug(f'No results for "{query}"')
         except Exception:

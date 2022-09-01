@@ -12,8 +12,8 @@ class ScanTarget:
     def __init__(self, scan, *targets, strict_scope=False):
         self.scan = scan
         self.dummy_module = ScanTargetDummyModule(scan)
-        self._events = dict()
-        if len(targets) > 0:
+        self._events = {}
+        if targets:
             log.verbose(f"Creating events from {len(targets):,} targets")
         for t in targets:
             self.add_target(t)
@@ -72,12 +72,10 @@ class ScanTarget:
         yield from self.events
 
     def __contains__(self, other):
-        # if "other" is a ScanTarget
-        if type(other) == self.__class__:
-            contained_in_self = [self._contains(e) for e in other.events]
-            return all(contained_in_self)
-        else:
+        if type(other) != self.__class__:
             return self._contains(other)
+        contained_in_self = [self._contains(e) for e in other.events]
+        return all(contained_in_self)
 
     def __bool__(self):
         return bool(self._events)
@@ -95,13 +93,12 @@ class ScanTarget:
         """
         Returns the total number of HOSTS (not events) in the target
         """
-        num_hosts = 0
-        for host, _events in self._events.items():
-            if type(host) in (ipaddress.IPv4Network, ipaddress.IPv6Network):
-                num_hosts += host.num_addresses
-            else:
-                num_hosts += len(_events)
-        return num_hosts
+        return sum(
+            host.num_addresses
+            if type(host) in (ipaddress.IPv4Network, ipaddress.IPv6Network)
+            else len(_events)
+            for host, _events in self._events.items()
+        )
 
 
 class ScanTargetDummyModule(BaseModule):

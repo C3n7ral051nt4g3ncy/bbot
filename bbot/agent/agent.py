@@ -28,10 +28,10 @@ class Agent:
     def setup(self):
         websocket.enableTrace(False)
         if not self.url:
-            log.error(f"Must specify agent_url")
+            log.error("Must specify agent_url")
             return False
         if not self.token:
-            log.error(f"Must specify agent_token")
+            log.error("Must specify agent_token")
             return False
         self.ws = websocket.WebSocketApp(
             f"{self.url}/control/",
@@ -46,10 +46,10 @@ class Agent:
     def start(self):
         not_keyboardinterrupt = False
         while 1:
-            not_keyboardinterrupt = self.ws.run_forever()
-            if not not_keyboardinterrupt:
+            if not_keyboardinterrupt := self.ws.run_forever():
+                sleep(1)
+            else:
                 break
-            sleep(1)
 
     def send(self, message):
         while 1:
@@ -118,7 +118,7 @@ class Agent:
                 self.thread = threading.Thread(target=self.scan.start, daemon=True)
                 self.thread.start()
 
-                return {"success": f"Started scan", "scan_id": self.scan.id}
+                return {"success": "Started scan", "scan_id": self.scan.id}
             else:
                 msg = f"Scan {self.scan.id} already in progress"
                 log.warning(msg)

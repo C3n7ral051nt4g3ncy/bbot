@@ -73,7 +73,7 @@ def ntlmdecode(authenticate_header):
     except Exception:
         raise NTLMError(f"Failed to decode NTLM challenge: {authenticate_header}")
 
-    if not st[:8] == b"NTLMSSP\x00":
+    if st[:8] != b"NTLMSSP\x00":
         raise NTLMError("NTLMSSP header not found at start of input string")
 
     try:

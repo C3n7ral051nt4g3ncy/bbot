@@ -45,8 +45,8 @@ class CSV(BaseOutputModule):
             [
                 getattr(event, "type", ""),
                 getattr(event, "data", ""),
-                str(getattr(event, "module", "")),
-                str(getattr(event, "scope_distance", "")),
+                getattr(event, "module", ""),
+                getattr(event, "scope_distance", ""),
                 ",".join(sorted(list(getattr(event, "tags", [])))),
             ]
         )

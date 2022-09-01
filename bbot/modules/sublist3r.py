@@ -15,7 +15,5 @@ class sublist3r(crobat):
         return self.helpers.request(f"{self.base_url}?domain={query}")
 
     def parse_results(self, r, query):
-        json = r.json()
-        if json:
-            for hostname in json:
-                yield hostname
+        if json := r.json():
+            yield from json

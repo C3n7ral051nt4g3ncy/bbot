@@ -53,7 +53,7 @@ class viewdns(BaseModule):
                     domain = table_cells[0].text.strip().lower()
                     # registrar == last cell
                     registrar = table_cells[-1].text.strip()
-                    if domain and not domain == query:
+                    if domain and domain != query:
                         to_yield = (domain, registrar)
                         to_yield_hash = hash(to_yield)
                         if to_yield_hash not in yielded:

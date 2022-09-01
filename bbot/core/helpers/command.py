@@ -28,9 +28,9 @@ def run_live(self, command, *args, **kwargs):
         If you want to see it, pass stderr=None
     """
 
-    if not "stdout" in kwargs:
+    if "stdout" not in kwargs:
         kwargs["stdout"] = subprocess.PIPE
-    if not "stderr" in kwargs:
+    if "stderr" not in kwargs:
         kwargs["stderr"] = subprocess.PIPE
     _input = kwargs.pop("input", "")
     input_msg = ""
@@ -45,14 +45,11 @@ def run_live(self, command, *args, **kwargs):
             if type(_input) in (str, bytes):
                 _input = (_input,)
             self.feed_pipe(process.stdin, _input, text=False)
-        for line in io.TextIOWrapper(process.stdout, encoding="utf-8", errors="ignore"):
-            yield line
-
+        yield from io.TextIOWrapper(process.stdout, encoding="utf-8", errors="ignore")
         # surface stderr
         process.wait()
         if process.stderr and process.returncode != 0:
-            stderr = smart_decode(process.stderr.read())
-            if stderr:
+            if stderr := smart_decode(process.stderr.read()):
                 command_str = " ".join(command)
                 log.warning(f"Stderr for {command_str}:\n\t{stderr}")
 
@@ -66,11 +63,11 @@ def run(self, command, *args, **kwargs):
     NOTE: STDERR is captured (not displayed) by default.
         If you want to see it, self.debug(process.stderr) or pass stderr=None
     """
-    if not "stdout" in kwargs:
+    if "stdout" not in kwargs:
         kwargs["stdout"] = subprocess.PIPE
-    if not "stderr" in kwargs:
+    if "stderr" not in kwargs:
         kwargs["stderr"] = subprocess.PIPE
-    if not "text" in kwargs:
+    if "text" not in kwargs:
         kwargs["text"] = True
 
     command = [str(s) for s in command]
@@ -79,8 +76,7 @@ def run(self, command, *args, **kwargs):
 
     # surface stderr
     if result.stderr and result.returncode != 0:
-        stderr = smart_decode(result.stderr)
-        if stderr:
+        if stderr := smart_decode(result.stderr):
             command_str = " ".join(command)
             log.warning(f"Stderr for {command_str}:\n\t{stderr}")
 
@@ -151,7 +147,7 @@ def _feed_pipe(self, pipe, content, text=True):
                     for c in content:
                         p.write(decode_fn(c) + newline)
         except BrokenPipeError:
-            log.debug(f"Broken pipe in _feed_pipe()")
+            log.debug("Broken pipe in _feed_pipe()")
         except ValueError:
             import traceback
 

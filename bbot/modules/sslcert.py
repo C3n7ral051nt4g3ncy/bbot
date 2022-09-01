@@ -33,11 +33,7 @@ class sslcert(BaseModule):
     def handle_event(self, event):
 
         _host = event.host
-        if event.port:
-            port = event.port
-        else:
-            port = 443
-
+        port = event.port or 443
         # turn hostnames into IP address(es)
         if self.helpers.is_ip(_host):
             hosts = [_host]
@@ -49,8 +45,9 @@ class sslcert(BaseModule):
                 if event_data is not None and event_data != event:
                     self.debug(f"Discovered new {event_type} via SSL certificate parsing: [{event_data}]")
                     try:
-                        ssl_event = self.make_event(event_data, event_type, source=event, raise_error=True)
-                        if ssl_event:
+                        if ssl_event := self.make_event(
+                            event_data, event_type, source=event, raise_error=True
+                        ):
                             self.emit_event(ssl_event)
                     except ValidationError as e:
                         self.hugeinfo(f'Malformed {event_type} "{event_data}" at {event.data}')
@@ -68,9 +65,8 @@ class sslcert(BaseModule):
                     self.hosts_visited.add(host_hash)
 
             socket_type = socket.AF_INET
-            if self.helpers.is_ip(host):
-                if host.version == 6:
-                    socket_type = socket.AF_INET6
+            if self.helpers.is_ip(host) and host.version == 6:
+                socket_type = socket.AF_INET6
             host = str(host)
             sock = socket.socket(socket_type, socket.SOCK_STREAM)
             timeout = self.config.get("timeout", 5.0)
@@ -118,7 +114,7 @@ class sslcert(BaseModule):
         sans = []
         raw_sans = None
         ext_count = cert.get_extension_count()
-        for i in range(0, ext_count):
+        for i in range(ext_count):
             ext = cert.get_extension(i)
             if "subjectAltName" in str(ext.get_short_name()):
                 raw_sans = str(ext)

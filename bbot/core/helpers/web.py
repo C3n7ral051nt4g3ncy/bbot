@@ -14,7 +14,7 @@ log = logging.getLogger("bbot.core.helpers.web")
 def wordlist(self, path, lines=None, **kwargs):
     if not path:
         raise WordlistError(f"Invalid wordlist: {path}")
-    if not "cache_hrs" in kwargs:
+    if "cache_hrs" not in kwargs:
         kwargs["cache_hrs"] = 720
     if self.is_url(path):
         filename = self.download(str(path), **kwargs)
@@ -27,16 +27,15 @@ def wordlist(self, path, lines=None, **kwargs):
 
     if lines is None:
         return filename
-    else:
-        lines = int(lines)
-        with open(filename) as f:
-            read_lines = f.readlines()
-        cache_key = f"{filename}:{lines}"
-        truncated_filename = self.cache_filename(cache_key)
-        with open(truncated_filename, "w") as f:
-            for line in read_lines[:lines]:
-                f.write(line)
-        return truncated_filename
+    lines = int(lines)
+    with open(filename) as f:
+        read_lines = f.readlines()
+    cache_key = f"{filename}:{lines}"
+    truncated_filename = self.cache_filename(cache_key)
+    with open(truncated_filename, "w") as f:
+        for line in read_lines[:lines]:
+            f.write(line)
+    return truncated_filename
 
 
 def download(self, url, **kwargs):
@@ -100,7 +99,10 @@ def request(self, *args, **kwargs):
             session = CachedSession(expire_after=cache_for, backend=backend)
             self.cache_sessions[cache_for] = session
 
-    if kwargs.pop("session", None) or not cache_for:
+    if kwargs.pop("session", None):
+        session = kwargs.pop("session", None)
+
+    elif not cache_for:
         session = kwargs.pop("session", None)
 
     http_timeout = self.config.get("http_timeout", 20)
@@ -117,10 +119,10 @@ def request(self, *args, **kwargs):
     if not args and "method" not in kwargs:
         kwargs["method"] = "GET"
 
-    if not "timeout" in kwargs:
+    if "timeout" not in kwargs:
         kwargs["timeout"] = http_timeout
 
-    headers = kwargs.get("headers", None)
+    headers = kwargs.get("headers")
 
     if headers is None:
         headers = {}
@@ -132,7 +134,7 @@ def request(self, *args, **kwargs):
     while retries == "infinite" or retries >= 0:
         try:
             if http_debug:
-                logstr = f"Web request: {str(args)}, {str(kwargs)}"
+                logstr = f"Web request: {str(args)}, {kwargs}"
                 log.debug(logstr)
             if session is not None:
                 response = session.request(*args, **kwargs)
@@ -148,9 +150,8 @@ def request(self, *args, **kwargs):
             if retries == "infinite" or retries >= 0:
                 log.warning(f'Error requesting "{url}" ({e}), retrying...')
                 sleep(1)
-            else:
-                if raise_error:
-                    raise e
+            elif raise_error:
+                raise e
 
 
 def api_page_iter(self, url, page_size=100, json=True, **requests_kwargs):
@@ -184,8 +185,7 @@ def curl(self, *args, **kwargs):
 
     curl_command = ["curl", url, "-s"]
 
-    raw_path = kwargs.get("raw_path", False)
-    if raw_path:
+    if raw_path := kwargs.get("raw_path", False):
         curl_command.append("--path-as-is")
 
     # respect global ssl verify settings
@@ -195,9 +195,9 @@ def curl(self, *args, **kwargs):
 
     headers = kwargs.get("headers", {})
 
-    ignore_bbot_global_settings = kwargs.get("ignore_bbot_global_settings", False)
-
-    if ignore_bbot_global_settings:
+    if ignore_bbot_global_settings := kwargs.get(
+        "ignore_bbot_global_settings", False
+    ):
         log.debug("ignore_bbot_global_settings enabled. Global settings will not be applied")
     else:
         http_timeout = self.config.get("http_timeout", 20)
@@ -207,7 +207,7 @@ def curl(self, *args, **kwargs):
             headers["User-Agent"] = user_agent
 
         # add the timeout
-        if not "timeout" in kwargs:
+        if "timeout" not in kwargs:
             timeout = http_timeout
 
         curl_command.append("-m")
@@ -226,39 +226,28 @@ def curl(self, *args, **kwargs):
     post_data = kwargs.get("post_data", {})
     if len(post_data.items()) > 0:
         curl_command.append("-d")
-        post_data_str = ""
-        for k, v in post_data.items():
-            post_data_str += f"&{k}={v}"
+        post_data_str = "".join(f"&{k}={v}" for k, v in post_data.items())
         curl_command.append(post_data_str.lstrip("&"))
 
-    method = kwargs.get("method", "")
-    if method:
+    if method := kwargs.get("method", ""):
         curl_command.append("-X")
         curl_command.append(method)
 
-    cookies = kwargs.get("cookies", "")
-    if cookies:
-
+    if cookies := kwargs.get("cookies", ""):
         curl_command.append("-b")
-        cookies_str = ""
-        for k, v in cookies.items():
-            cookies_str += f"{k}={v}; "
+        cookies_str = "".join(f"{k}={v}; " for k, v in cookies.items())
         curl_command.append(f'{cookies_str.rstrip(" ")}')
 
-    path_override = kwargs.get("path_override", None)
-    if path_override:
+    if path_override := kwargs.get("path_override", None):
         curl_command.append("--request-target")
         curl_command.append(f"{path_override}")
 
-    head_mode = kwargs.get("head_mode", None)
-    if head_mode:
+    if head_mode := kwargs.get("head_mode", None):
         curl_command.append("-I")
 
-    raw_body = kwargs.get("raw_body", None)
-    if raw_body:
+    if raw_body := kwargs.get("raw_body", None):
         curl_command.append("-d")
         curl_command.append(raw_body)
 
     output_bytes = self.run(curl_command, text=False).stdout
-    output = self.smart_decode(output_bytes)
-    return output
+    return self.smart_decode(output_bytes)

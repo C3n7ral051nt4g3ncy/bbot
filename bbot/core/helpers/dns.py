@@ -33,14 +33,17 @@ class DNSHelper:
         self.wildcard_ignore = self.parent_helper.config.get("dns_wildcard_ignore", None)
         if not self.wildcard_ignore:
             self.wildcard_ignore = []
-        self.wildcard_ignore = tuple([str(d).strip().lower() for d in self.wildcard_ignore])
+        self.wildcard_ignore = tuple(
+            str(d).strip().lower() for d in self.wildcard_ignore
+        )
+
         self.wildcard_tests = self.parent_helper.config.get("dns_wildcard_tests", 5)
-        self._wildcard_cache = dict()
+        self._wildcard_cache = {}
         # since wildcard detection takes some time, This is to prevent multiple
         # modules from kicking off wildcard detection for the same domain at the same time
         self._wildcard_lock = NamedLock()
 
-        self._errors = dict()
+        self._errors = {}
         self._error_lock = Lock()
 
         # we need our own threadpool because using the shared one can lead to deadlocks
@@ -50,7 +53,7 @@ class DNSHelper:
 
         self._debug = self.parent_helper.config.get("dns_debug", False)
 
-        self._dummy_modules = dict()
+        self._dummy_modules = {}
         self._dummy_modules_lock = Lock()
 
         self._cache = self.parent_helper.CacheDict(max_size=10000)
@@ -104,17 +107,15 @@ class DNSHelper:
                         types = ["A", "AAAA", "SRV", "MX", "NS", "SOA", "CNAME", "TXT"]
                     else:
                         types = [t.strip().upper()]
-                elif any([isinstance(t, x) for x in (list, tuple)]):
+                elif any(isinstance(t, x) for x in (list, tuple)):
                     types = [str(_).strip().upper() for _ in t]
             for t in types:
-                if getattr(self.parent_helper.scan, "stopping", False) == True:
+                if getattr(self.parent_helper.scan, "stopping", False):
                     break
                 r, e = self._resolve_hostname(query, rdtype=t, **kwargs)
                 if r:
                     results.append((t, r))
-                for error in e:
-                    errors.append((t, error))
-
+                errors.extend((t, error) for error in e)
             return (results, errors)
 
     def _resolve_hostname(self, query, **kwargs):
@@ -163,13 +164,10 @@ class DNSHelper:
 
     def resolve_event(self, event):
         result = self._resolve_event(event)
-        # if it's a wildcard, go again with _wildcard.{domain}
-        if len(result) == 1:
-            event = result[0]
-            return self._resolve_event(event, check_wildcard=False)
-        # else we're good
-        else:
+        if len(result) != 1:
             return result
+        event = result[0]
+        return self._resolve_event(event, check_wildcard=False)
 
     def _resolve_event(self, event, check_wildcard=True):
         """
@@ -213,7 +211,7 @@ class DNSHelper:
                     event_tags.add(f"{rdtype.lower()}_record")
                     rdtype = str(rdtype).upper()
                     # whitelisting and blacklist of IPs
-                    if rdtype in ("A", "AAAA"):
+                    if rdtype in {"A", "AAAA"}:
                         for r in records:
                             for _, t in self.extract_targets(r):
                                 with suppress(ValidationError):
@@ -249,7 +247,7 @@ class DNSHelper:
             ("evilcorp.com", {"2.2.2.2"})
         ]
         """
-        futures = dict()
+        futures = {}
         for query in queries:
             future = self._thread_pool.submit_task(self._catch_keyboardinterrupt, self.resolve, query, **kwargs)
             futures[future] = query
@@ -263,7 +261,7 @@ class DNSHelper:
         """
         results = set()
         rdtype = str(record.rdtype.name).upper()
-        if rdtype in ("A", "AAAA", "NS", "CNAME", "PTR"):
+        if rdtype in {"A", "AAAA", "NS", "CNAME", "PTR"}:
             results.add((rdtype, self._clean_dns_record(record)))
         elif rdtype == "SOA":
             results.add((rdtype, self._clean_dns_record(record.mname)))
@@ -311,8 +309,7 @@ class DNSHelper:
             if reliability >= min_reliability and is_ip(ip, version=4):
                 nameservers.add(ip)
         log.verbose(f"Loaded {len(nameservers):,} nameservers from {nameservers_url}")
-        resolver_list = self.verify_nameservers(nameservers)
-        return resolver_list
+        return self.verify_nameservers(nameservers)
 
     @property
     def resolvers(self):
@@ -322,11 +319,13 @@ class DNSHelper:
         if self._resolver_list is None:
             file_content = self.parent_helper.cache_get("resolver_list")
             if file_content is not None:
-                self._resolver_list = set([l for l in file_content.splitlines() if l])
+                self._resolver_list = {l for l in file_content.splitlines() if l}
             if not self._resolver_list:
-                log.info(f"Fetching and validating public DNS servers, this may take a few minutes")
-                resolvers = self.get_valid_resolvers()
-                if resolvers:
+                log.info(
+                    "Fetching and validating public DNS servers, this may take a few minutes"
+                )
+
+                if resolvers := self.get_valid_resolvers():
                     self._resolver_list = resolvers
                     self.parent_helper.cache_put("resolver_list", "\n".join(self._resolver_list))
                 else:
@@ -382,7 +381,10 @@ class DNSHelper:
         try:
             a_results = [str(r) for r in list(resolver.resolve("dns.google", "A"))]
             aaaa_results = [str(r) for r in list(resolver.resolve("dns.google", "AAAA"))]
-            if not ("2001:4860:4860::8888" in aaaa_results and "8.8.8.8" in a_results):
+            if (
+                "2001:4860:4860::8888" not in aaaa_results
+                or "8.8.8.8" not in a_results
+            ):
                 error = f"Nameserver {nameserver} failed to resolve basic query"
         except Exception:
             error = f"Nameserver {nameserver} failed to resolve basic query within {timeout} seconds"
@@ -390,20 +392,13 @@ class DNSHelper:
         # then, make sure it isn't feeding us garbage data
         randhost = f"www-m.{rand_string(9)}.{rand_string(10)}.com"
         if error is None:
-            try:
+            with suppress(dns.exception.DNSException):
                 a_results = list(resolver.resolve(randhost, "A"))
                 error = f"Nameserver {nameserver} returned garbage data"
-            except dns.exception.DNSException:
-                pass
-                # Garbage query to nameserver failed successfully ;)
         if error is None:
-            try:
+            with suppress(dns.exception.DNSException):
                 a_results = list(resolver.resolve(randhost, "AAAA"))
                 error = f"Nameserver {nameserver} returned garbage data"
-            except dns.exception.DNSException:
-                pass
-                # Garbage query to nameserver failed successfully ;)
-
         return nameserver, error
 
     def _catch(self, callback, *args, **kwargs):
@@ -418,10 +413,10 @@ class DNSHelper:
             self.debug(f"{e} (args={args}, kwargs={kwargs})")
         except Exception:
             log.warning(f"Error in {callback.__qualname__}() with args={args}, kwargs={kwargs}")
-        return list()
+        return []
 
     def is_wildcard(self, query):
-        if is_ip(query) or not "." in query:
+        if is_ip(query) or "." not in query:
             return False, query
         for d in self.wildcard_ignore:
             if self.parent_helper.host_in_host(query, d):
@@ -447,8 +442,6 @@ class DNSHelper:
 
             # resolve the base query
             orig_results = self.resolve(query)
-            is_wildcard = False
-
             futures = []
             # resolve a bunch of random subdomains of the same parent
             for _ in range(self.wildcard_tests):
@@ -459,14 +452,14 @@ class DNSHelper:
             # put all the IPs from the random subdomains in one bucket
             wildcard_ips = set()
             for future in self.parent_helper.as_completed(futures):
-                ips = future.result()
-                if ips:
+                if ips := future.result():
                     wildcard_ips.update(ips)
 
-            # if all of the original results are in the random bucket
-            if orig_results and wildcard_ips and all([ip in wildcard_ips for ip in orig_results]):
-                # then ladies and gentlemen we have a wildcard
-                is_wildcard = True
+            is_wildcard = bool(
+                orig_results
+                and wildcard_ips
+                and all(ip in wildcard_ips for ip in orig_results)
+            )
 
             self._wildcard_cache.update({parent_hash: is_wildcard})
             if is_wildcard:

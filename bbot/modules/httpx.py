@@ -52,11 +52,7 @@ class httpx(BaseModule):
 
         in_scope_only = self.config.get("in_scope_only", True)
         safe_to_visit = "httpx-safe" in event.tags
-        if not safe_to_visit and (in_scope_only and not self.scan.in_scope(event)):
-            return False
-        # reject base URLs to avoid visiting a resource twice
-        # note: speculate makes open ports from
-        return True
+        return bool(safe_to_visit or not in_scope_only or self.scan.in_scope(event))
 
     def handle_batch(self, *events):
 
@@ -95,8 +91,7 @@ class httpx(BaseModule):
             # "-r",
             # self.helpers.resolver_file,
         ]
-        proxy = self.scan.config.get("http_proxy", "")
-        if proxy:
+        if proxy := self.scan.config.get("http_proxy", ""):
             command += ["-http-proxy", proxy]
         for line in self.helpers.run_live(command, input=list(stdin), stderr=subprocess.DEVNULL):
             try:
@@ -111,20 +106,20 @@ class httpx(BaseModule):
                 self.debug(f'No HTTP status code for "{url}"')
                 continue
 
-            source_event = stdin.get(j.get("input", ""), None)
+            source_event = stdin.get(j.get("input", ""))
 
             if source_event is None:
                 self.warning(f"Unable to correlate source event from: {line}")
                 continue
 
             # discard 404s from unverified URLs
-            if source_event.type == "URL_UNVERIFIED" and status_code in (404,):
+            if source_event.type == "URL_UNVERIFIED" and status_code in {404}:
                 self.debug(f'Discarding 404 from "{url}"')
                 continue
 
             # main URL
             url_event = self.make_event(url, "URL", source_event, tags=[f"status-{status_code}"])
-            if url_event and not "httpx-only" in url_event.tags:
+            if url_event and "httpx-only" not in url_event.tags:
                 if url_event != source_event:
                     self.emit_event(url_event)
                 # HTTP response

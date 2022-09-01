@@ -145,17 +145,14 @@ class hunt(BaseModule):
             self.debug(f"FOUND PARAM ({i}) IN JQUERY GET PARAMS")
             yield i
 
-        # check for jquery post parameters
-        jquery_post = re.findall(self.jquery_post_regex, body)
-        if jquery_post:
+        if jquery_post := re.findall(self.jquery_post_regex, body):
             for i in jquery_post:
                 for x in i.split(","):
                     s = x.split(":")[0].rstrip()
                     self.debug(f"FOUND PARAM ({s}) IN A JQUERY POST PARAMS")
                     yield s
 
-        a_tag = re.findall(self.a_tag_regex, body)
-        if a_tag:
+        if a_tag := re.findall(self.a_tag_regex, body):
             for url in a_tag:
                 if url.startswith("http"):
                     url_parsed = self.helpers.parse_url(url)

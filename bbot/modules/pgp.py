@@ -16,10 +16,9 @@ class pgp(crobat):
 
     def handle_event(self, event):
         query = self.make_query(event)
-        results = self.query(query)
-        if results:
+        if results := self.query(query):
             for hostname in results:
-                if not hostname == event:
+                if hostname != event:
                     self.emit_event(hostname, "EMAIL_ADDRESS", event, abort_if=self.abort_if)
 
     def query(self, query):

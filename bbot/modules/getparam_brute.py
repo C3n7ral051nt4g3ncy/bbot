@@ -26,16 +26,14 @@ class getparam_brute(header_brute):
     def gen_count_args(self, url):
 
         getparam_count = 40
-        while 1:
-            if getparam_count < 0:
-                break
+        while 1 and getparam_count >= 0:
             fake_getparams = {
-                self.helpers.rand_string(14): self.helpers.rand_string(14) for _ in range(0, getparam_count)
+                self.helpers.rand_string(14): self.helpers.rand_string(14)
+                for _ in range(getparam_count)
             }
+
             yield getparam_count, (self.helpers.add_get_params(url, fake_getparams).geturl(),), {}
             getparam_count -= 5
 
     def clean_list(self, getparam):
-        if (len(getparam) > 0) and (getparam.strip() not in self.getparam_blacklist):
-            return True
-        return False
+        return len(getparam) > 0 and getparam.strip() not in self.getparam_blacklist

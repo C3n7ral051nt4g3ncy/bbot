@@ -27,7 +27,7 @@ except ConfigLoadError as e:
     error_and_exit(e)
 
 # ensure bbot_home
-if not "home" in config:
+if "home" not in config:
     config["home"] = "~/.bbot"
 home = Path(config["home"]).expanduser().resolve()
 config["home"] = str(home)
@@ -82,9 +82,7 @@ if args.cli_options is not None:
 bbot_environ = environ.flatten_config(config)
 os.environ.update(bbot_environ)
 
-# handle HTTP proxy
-http_proxy = config.get("http_proxy", "")
-if http_proxy:
+if http_proxy := config.get("http_proxy", ""):
     os.environ["HTTP_PROXY"] = http_proxy
     os.environ["HTTPS_PROXY"] = http_proxy
 

@@ -72,35 +72,35 @@ class DepsInstaller:
                 if len(dependencies) <= 0:
                     log.debug(f'No setup to do for module "{m}"')
                     succeeded.append(m)
-                    continue
-                else:
-                    if success is None or (success is False and self.retry_deps) or self.force_deps:
-                        if not notified:
-                            log.info(f"Installing module dependencies. Please be patient, this may take a while.")
-                            notified = True
-                        log.verbose(f'Installing dependencies for module "{m}"')
-                        # get sudo access if we need it
-                        if preloaded.get("sudo", False) == True:
-                            self.ensure_root(f'Module "{m}" needs root privileges to install its dependencies.')
-                        success = self.install_module(m)
-                        self.setup_status[module_hash] = success
-                        if success or self.ignore_failed_deps:
-                            log.debug(f'Setup succeeded for module "{m}"')
-                            succeeded.append(m)
-                        else:
-                            log.warning(f'Setup failed for module "{m}"')
-                            failed.append(m)
+                elif success is None or (success is False and self.retry_deps) or self.force_deps:
+                    if not notified:
+                        log.info(
+                            "Installing module dependencies. Please be patient, this may take a while."
+                        )
+
+                        notified = True
+                    log.verbose(f'Installing dependencies for module "{m}"')
+                    # get sudo access if we need it
+                    if preloaded.get("sudo", False) == True:
+                        self.ensure_root(f'Module "{m}" needs root privileges to install its dependencies.')
+                    success = self.install_module(m)
+                    self.setup_status[module_hash] = success
+                    if success or self.ignore_failed_deps:
+                        log.debug(f'Setup succeeded for module "{m}"')
+                        succeeded.append(m)
                     else:
-                        if success or self.ignore_failed_deps:
-                            log.debug(
-                                f'Skipping dependency install for module "{m}" because it\'s already done (--force-deps to re-run)'
-                            )
-                            succeeded.append(m)
-                        else:
-                            log.warning(
-                                f'Skipping dependency install for module "{m}" because it failed previously (--retry-deps to retry or --ignore-failed-deps to ignore)'
-                            )
-                            failed.append(m)
+                        log.warning(f'Setup failed for module "{m}"')
+                        failed.append(m)
+                elif success or self.ignore_failed_deps:
+                    log.debug(
+                        f'Skipping dependency install for module "{m}" because it\'s already done (--force-deps to re-run)'
+                    )
+                    succeeded.append(m)
+                else:
+                    log.warning(
+                        f'Skipping dependency install for module "{m}" because it failed previously (--retry-deps to retry or --ignore-failed-deps to ignore)'
+                    )
+                    failed.append(m)
 
         finally:
             self.write_setup_status()
@@ -111,24 +111,16 @@ class DepsInstaller:
         success = True
         preloaded = self.all_modules_preloaded[module]
 
-        # apt
-        deps_apt = preloaded["deps"]["apt"]
-        if deps_apt:
+        if deps_apt := preloaded["deps"]["apt"]:
             self.apt_install(deps_apt)
 
-        # pip
-        deps_pip = preloaded["deps"]["pip"]
-        if deps_pip:
+        if deps_pip := preloaded["deps"]["pip"]:
             success &= self.pip_install(deps_pip)
 
-        # shell
-        deps_shell = preloaded["deps"]["shell"]
-        if deps_shell:
+        if deps_shell := preloaded["deps"]["shell"]:
             success &= self.shell(module, deps_shell)
 
-        # ansible tasks
-        ansible_tasks = preloaded["deps"]["ansible"]
-        if ansible_tasks:
+        if ansible_tasks := preloaded["deps"]["ansible"]:
             success &= self.tasks(module, ansible_tasks)
 
         return success
@@ -193,7 +185,7 @@ class DepsInstaller:
         if success:
             log.info(f"Successfully ran {len(commands):,} shell commands")
         else:
-            log.warning(f"Failed to run shell dependencies")
+            log.warning("Failed to run shell dependencies")
         return success
 
     def tasks(self, module, tasks):
@@ -207,7 +199,7 @@ class DepsInstaller:
     def ansible_run(self, tasks=None, module=None, args=None, ansible_args=None):
         _ansible_args = {"ansible_connection": "local"}
         if ansible_args is not None:
-            _ansible_args.update(ansible_args)
+            _ansible_args |= ansible_args
         module_args = None
         if args:
             module_args = " ".join([f'{k}="{v}"' for k, v in args.items()])
@@ -219,7 +211,7 @@ class DepsInstaller:
         if self._sudo_password is not None:
             _ansible_args["ansible_become_password"] = self._sudo_password
         playbook_hash = self.parent_helper.sha1(str(playbook)).hexdigest()
-        data_dir = self.data_dir / (module if module else f"playbook_{playbook_hash}")
+        data_dir = self.data_dir / (module or f"playbook_{playbook_hash}")
         shutil.rmtree(data_dir, ignore_errors=True)
         self.parent_helper.mkdir(data_dir)
 
@@ -250,7 +242,7 @@ class DepsInstaller:
         return success, err
 
     def read_setup_status(self):
-        setup_status = dict()
+        setup_status = {}
         if self.setup_status_cache.is_file():
             with open(self.setup_status_cache) as f:
                 with suppress(Exception):
@@ -262,18 +254,19 @@ class DepsInstaller:
             json.dump(self.setup_status, f)
 
     def ensure_root(self, message=""):
-        if os.geteuid() != 0 and self._sudo_password is None:
-            if message:
-                log.warning(message)
-            # sleep for a split second to flush previous log messages
-            while not self._sudo_password:
-                sleep(0.1)
-                password = getpass.getpass(prompt="[USER] Please enter sudo password: ")
-                if self.verify_sudo_password(password):
-                    log.success("Authentication successful")
-                    self._sudo_password = password
-                else:
-                    log.warning("Incorrect password")
+        if os.geteuid() == 0 or self._sudo_password is not None:
+            return
+        if message:
+            log.warning(message)
+        # sleep for a split second to flush previous log messages
+        while not self._sudo_password:
+            sleep(0.1)
+            password = getpass.getpass(prompt="[USER] Please enter sudo password: ")
+            if self.verify_sudo_password(password):
+                log.success("Authentication successful")
+                self._sudo_password = password
+            else:
+                log.warning("Incorrect password")
 
     def verify_sudo_password(self, sudo_pass):
         try:

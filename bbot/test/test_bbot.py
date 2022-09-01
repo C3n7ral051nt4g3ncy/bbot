@@ -10,7 +10,7 @@ from bbot.core.errors import *
 from .bbot_fixtures import *  # noqa: F401
 from bbot.modules import module_loader
 
-log = logging.getLogger(f"bbot.test")
+log = logging.getLogger("bbot.test")
 
 # silence stdout
 root_logger = logging.getLogger()
@@ -75,8 +75,8 @@ def test_events(events, scan, helpers, bbot_config):
     assert "fsocie.ty" not in events.subdomain
     assert events.subdomain in events.domain
     assert events.domain not in events.subdomain
-    assert not events.ipv4 in events.domain
-    assert not events.netv6 in events.domain
+    assert events.ipv4 not in events.domain
+    assert events.netv6 not in events.domain
     assert events.emoji not in events.domain
     assert events.domain not in events.emoji
     assert "evilcorp.com" == scan.make_event(" eViLcorp.COM.:88", "DNS_NAME", dummy=True)
@@ -257,7 +257,7 @@ def test_manager(bbot_config):
     localhost.module = DummyModule1()
     # test abort_if
     manager._emit_event(localhost, abort_if=lambda e: e.module._type == "output")
-    assert len(results) == 0
+    assert not results
     manager._emit_event(
         localhost, on_success_callback=success_callback, abort_if=lambda e: e.module._type == "plumbus"
     )
@@ -266,7 +266,7 @@ def test_manager(bbot_config):
     results.clear()
     # test deduplication
     manager._emit_event(localhost, on_success_callback=success_callback)
-    assert len(results) == 0
+    assert not results
     # test dns resolution
     googledns = scan1.make_event("8.8.8.8", source=scan1.root_event)
     googledns.module = DummyModule2()
@@ -275,25 +275,25 @@ def test_manager(bbot_config):
     event_children = []
     manager.emit_event = lambda e, *args, **kwargs: event_children.append(e)
     manager._emit_event(googledns)
-    assert len(event_children) > 0
+    assert event_children
     assert googledns in results
     results.clear()
     event_children.clear()
     # same dns event
     manager._emit_event(googledns)
-    assert len(results) == 0
-    assert len(event_children) == 0
+    assert not results
+    assert not event_children
     # same dns event but with _force_output
     googledns._force_output = True
     manager._emit_event(googledns)
     assert googledns in results
-    assert len(event_children) == 0
+    assert not event_children
     googledns._force_output = False
     results.clear()
     # same dns event but different source
     googledns.source_id = "fdsa"
     manager._emit_event(googledns)
-    assert len(event_children) == 0
+    assert not event_children
     assert googledns in results
 
     # event filtering based on scope_distance

@@ -29,5 +29,4 @@ class binaryedge(shodan_dns):
         url = f"{self.base_url}/query/domains/subdomain/{self.helpers.quote(query)}"
         self.hugesuccess(url)
         j = self.helpers.request(url, headers=self.headers).json()
-        for subdomain in j.get("events", []):
-            yield subdomain
+        yield from j.get("events", [])

@@ -23,7 +23,9 @@ class urlscan(crobat):
             source_event = event
             if domain and domain != query:
                 domain_event = self.make_event(domain, "DNS_NAME", source=event)
-                if str(domain_event.host).endswith(query) and not str(domain_event.host) == str(event.host):
+                if str(domain_event.host).endswith(query) and str(
+                    domain_event.host
+                ) != str(event.host):
                     self.emit_event(domain_event, abort_if=self.abort_if)
                     source_event = domain_event
             if url:
@@ -60,5 +62,5 @@ class urlscan(crobat):
         except Exception:
             import traceback
 
-            self.warning(f"Error retrieving urlscan results")
+            self.warning("Error retrieving urlscan results")
             self.debug(traceback.format_exc())

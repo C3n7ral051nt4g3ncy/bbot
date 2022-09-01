@@ -40,17 +40,13 @@ class iis_shortnames(BaseModule):
         iis_shortname_config = "https://raw.githubusercontent.com/irsdl/IIS-ShortName-Scanner/master/config.xml"
         self.iis_scanner_jar = self.helpers.download(iis_shortname_jar, cache_hrs=720)
         self.iis_scanner_config = self.helpers.download(iis_shortname_config, cache_hrs=720)
-        if self.iis_scanner_jar and self.iis_scanner_config:
-            return True
-        return False
+        return bool(self.iis_scanner_jar and self.iis_scanner_config)
 
     def handle_event(self, event):
 
         normalized_url = event.data.rstrip("/") + "/"
-        result = self.detect(normalized_url)
-
-        if result:
-            description = f"IIS Shortname Vulnerability"
+        if result := self.detect(normalized_url):
+            description = "IIS Shortname Vulnerability"
             self.emit_event(
                 {"severity": "LOW", "host": str(event.host), "url": normalized_url, "description": description},
                 "VULNERABILITY",
@@ -89,9 +85,13 @@ class iis_shortnames(BaseModule):
             control = self.helpers.request(control_url, method=http_method)
             test_url = url.rstrip("/") + "/" + f"*~1*/{file_name}.aspx"
             test = self.helpers.request(test_url, method=http_method)
-            if (control != None) and (test != None):
-                if (control.status_code != 404) and (test.status_code == 404):
-                    detected = True
+            if (
+                (control != None)
+                and (test != None)
+                and (control.status_code != 404)
+                and (test.status_code == 404)
+            ):
+                detected = True
         return detected
 
     def shortname_parse(self, output):
@@ -100,7 +100,7 @@ class iis_shortnames(BaseModule):
         parseLines = output.split("\n")
         inDirectories = False
         inFiles = False
-        for idx, line in enumerate(parseLines):
+        for line in parseLines:
             if "Identified directories" in line:
                 inDirectories = True
             elif "Indentified files" in line:
@@ -108,9 +108,7 @@ class iis_shortnames(BaseModule):
                 inDirectories = False
             elif ":" in line:
                 pass
-            elif "Actual" in line:
-                pass
-            else:
+            elif "Actual" not in line:
                 if inFiles == True:
                     if len(line) > 0:
                         shortname = line.split(" ")[-1].split(".")[0].split("~")[0]

@@ -107,9 +107,8 @@ class HttpCompare:
 
         if len(ddiff.keys()) == 0:
             return True
-        else:
-            log.debug(ddiff)
-            return False
+        log.debug(ddiff)
+        return False
 
     def compare(
         self, subject, headers=None, cookies=None, check_reflection=False, method="GET", allow_redirects=False
@@ -161,13 +160,14 @@ class HttpCompare:
             )
             return (False, "code", reflection, subject_response)
 
-        different_headers = self.compare_headers(self.baseline.headers, subject_response.headers)
-        if different_headers:
+        if different_headers := self.compare_headers(
+            self.baseline.headers, subject_response.headers
+        ):
             log.debug(f"headers were different, no match [{different_headers}]")
             return (False, "header", reflection, subject_response)
 
         if self.compare_body(self.baseline_json, subject_json) == False:
-            log.debug(f"difference in HTML body, no match")
+            log.debug("difference in HTML body, no match")
             return (False, "body", reflection, subject_response)
         return (True, None, False, None)
 
@@ -177,7 +177,7 @@ class HttpCompare:
         """
         headers = None
         cookies = None
-        for i in range(0, rounds):
+        for _ in range(rounds):
             random_params = {self.parent_helper.rand_string(7): self.parent_helper.rand_string(6)}
             new_url = str(url)
             if mode == "getparam":

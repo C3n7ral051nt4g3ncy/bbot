@@ -22,7 +22,7 @@ class ScanManager:
         self.events_distributed_lock = threading.Lock()
         self.events_accepted = set()
         self.events_accepted_lock = threading.Lock()
-        self.events_resolved = dict()
+        self.events_resolved = {}
         self.events_resolved_lock = threading.Lock()
         self.dns_resolution = self.scan.config.get("dns_resolution", False)
 
@@ -84,9 +84,7 @@ class ScanManager:
 
             # Blacklist purging
             if "blacklisted" in event.tags:
-                reason = "event host"
-                if event_blacklisted_dns:
-                    reason = "DNS associations"
+                reason = "DNS associations" if event_blacklisted_dns else "event host"
                 log.debug(f"Omitting due to blacklisted {reason}: {event}")
                 emit_event = False
 
@@ -94,8 +92,7 @@ class ScanManager:
             while 1:
                 if self.scan.stopping:
                     raise ScanCancelledError()
-                resolved = event._resolved.wait(timeout=0.1)
-                if resolved:
+                if resolved := event._resolved.wait(timeout=0.1):
                     # update event's scope distance based on its parent
                     event.scope_distance = event.source.scope_distance + 1
                     break
@@ -111,12 +108,11 @@ class ScanManager:
                     if set_scope_distance == 0:
                         log.debug(f"Making {event} in-scope")
                     event.make_in_scope(set_scope_distance)
-                else:
-                    if event.scope_distance > self.scan.scope_report_distance:
-                        log.debug(
-                            f"Making {event} internal because its scope_distance ({event.scope_distance}) > scope_report_distance ({self.scan.scope_report_distance})"
-                        )
-                        event.make_internal()
+                elif event.scope_distance > self.scan.scope_report_distance:
+                    log.debug(
+                        f"Making {event} internal because its scope_distance ({event.scope_distance}) > scope_report_distance ({self.scan.scope_report_distance})"
+                    )
+                    event.make_internal()
             else:
                 log.debug(f"Making {event} in-scope because it does not have identifying scope information")
                 event.make_in_scope(0)
@@ -146,7 +142,7 @@ class ScanManager:
                 source_event.scope_distance = event.scope_distance
                 if "target" in event.tags:
                     source_event.tags.add("target")
-                if not str(event.module) == "speculate":
+                if str(event.module) != "speculate":
                     self.emit_event(source_event)
             if self.dns_resolution and emit_children:
                 dns_child_events = []
@@ -225,7 +221,7 @@ class ScanManager:
             log.error(f"Error in {callback.__qualname__}(): {e}")
             log.debug(traceback.format_exc())
         except KeyboardInterrupt:
-            log.debug(f"Interrupted")
+            log.debug("Interrupted")
             self.scan.stop()
         if callable(on_finish_callback):
             try:
@@ -268,15 +264,15 @@ class ScanManager:
         stats_recorded = False
         for mod in self.scan.modules.values():
             if not dup or mod.accept_dupes:
-                event_within_scope_distance = -1 < event.scope_distance <= self.scan.scope_search_distance
-                event_within_report_distance = -1 < event.scope_distance <= self.scan.scope_report_distance
                 if mod._type == "output":
+                    event_within_report_distance = -1 < event.scope_distance <= self.scan.scope_report_distance
                     if event_within_report_distance or (event._force_output and mod.emit_graph_trail):
                         mod.queue_event(event)
                         if not stats_recorded:
                             stats_recorded = True
                             self.scan.stats.event_produced(event)
                 else:
+                    event_within_scope_distance = -1 < event.scope_distance <= self.scan.scope_search_distance
                     if event_within_scope_distance:
                         mod.queue_event(event)
 
@@ -355,11 +351,7 @@ class ScanManager:
 
         # If scan looks to be finished, check an additional five times to ensure that it really is
         # There is a tiny chance of a race condition, which this helps to avoid
-        if passes is None:
-            passes = 5
-        else:
-            passes = max(1, int(passes))
-
+        passes = 5 if passes is None else max(1, int(passes))
         finished = True
         while passes > 0:
 
@@ -411,10 +403,10 @@ class ScanManager:
             if tasks_queued:
                 tasks_queued_str = " (" + ", ".join([f"{m}: {q:,}" for m, q in tasks_queued]) + ")"
 
-            num_events_queued = sum([sum(m[-1]) for m in events_queued])
+            num_events_queued = sum(sum(m[-1]) for m in events_queued)
             self.scan.hugeverbose(f"Events queued: {num_events_queued:,}{events_queued_str}")
 
-            num_tasks_queued = sum([m[-1] for m in tasks_queued])
+            num_tasks_queued = sum(m[-1] for m in tasks_queued)
             self.scan.hugeverbose(f"Module tasks queued: {num_tasks_queued:,}{tasks_queued_str}")
 
             num_scan_tasks = status["scan"]["queued_tasks"]["total"]
@@ -429,12 +421,14 @@ class ScanManager:
 
             if modules_running:
                 self.scan.hugeverbose(
-                    f'Modules running: {len(modules_running):,} ({", ".join([m for m in modules_running])})'
+                    f'Modules running: {len(modules_running):,} ({", ".join(list(modules_running))})'
                 )
+
             if modules_errored:
                 self.scan.hugeverbose(
-                    f'Modules errored: {len(modules_errored):,} ({", ".join([m for m in modules_errored])})'
+                    f'Modules errored: {len(modules_errored):,} ({", ".join(list(modules_errored))})'
                 )
+
 
         status.update({"modules_running": len(modules_running), "modules_errored": len(modules_errored)})
 

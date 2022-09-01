@@ -32,9 +32,7 @@ def is_domain(d):
     "www.evilcorp.co.uk" --> False
     """
     extracted = tldextract(d)
-    if extracted.domain and not extracted.subdomain:
-        return True
-    return False
+    return bool(extracted.domain and not extracted.subdomain)
 
 
 def is_subdomain(d):
@@ -43,17 +41,12 @@ def is_subdomain(d):
     "evilcorp.co.uk" --> False
     """
     extracted = tldextract(d)
-    if extracted.domain and extracted.subdomain:
-        return True
-    return False
+    return bool(extracted.domain and extracted.subdomain)
 
 
 def is_url(u):
     u = str(u)
-    for r in regexes.event_type_regexes["URL"]:
-        if r.match(u):
-            return True
-    return False
+    return any(r.match(u) for r in regexes.event_type_regexes["URL"])
 
 
 def split_host_port(d):
@@ -62,17 +55,17 @@ def split_host_port(d):
     "192.168.1.1:443" --> (IPv4Address('192.168.1.1'), 443)
     "[dead::beef]:443" --> (IPv6Address('dead::beef'), 443)
     """
-    if not "://" in d:
+    if "://" not in d:
         d = f"d://{d}"
     parsed = urlparse(d)
     port = None
     host = None
     with suppress(ValueError):
         if parsed.port is None:
-            if parsed.scheme == "https":
-                port = 443
-            elif parsed.scheme == "http":
+            if parsed.scheme == "http":
                 port = 80
+            elif parsed.scheme == "https":
+                port = 443
         else:
             port = int(parsed.port)
     with suppress(ValueError):
@@ -86,9 +79,7 @@ def parent_domain(d):
     "www.evilcorp.co.uk" --> "evilcorp.co.uk"
     "evilcorp.co.uk" --> "evilcorp.co.uk"
     """
-    if is_subdomain(d):
-        return ".".join(str(d).split(".")[1:])
-    return d
+    return ".".join(str(d).split(".")[1:]) if is_subdomain(d) else d
 
 
 def domain_parents(d, include_self=False):
@@ -129,7 +120,9 @@ def domain_stem(domain):
         www.evilcorp.com --> www.evilcorp
     """
     parsed = tldextract(str(domain))
-    return f".".join(parsed.subdomain.split(".") + parsed.domain.split(".")).strip(".")
+    return ".".join(
+        parsed.subdomain.split(".") + parsed.domain.split(".")
+    ).strip(".")
 
 
 def ip_network_parents(i, include_self=False):
@@ -147,15 +140,14 @@ def is_ip(d, version=None):
     "bad::c0de" --> True
     "evilcorp.com" --> False
     """
-    if type(d) in (ipaddress.IPv4Address, ipaddress.IPv6Address):
-        if version is None or version == d.version:
-            return True
-    try:
+    if type(d) in (ipaddress.IPv4Address, ipaddress.IPv6Address) and (
+        version is None or version == d.version
+    ):
+        return True
+    with suppress(Exception):
         ip = ipaddress.ip_address(d)
         if version is None or ip.version == version:
             return True
-    except Exception:
-        pass
     return False
 
 
@@ -200,13 +192,12 @@ def host_in_host(host1, host2):
     host2_ip_type = is_ip_type(host2)
     # if both hosts are IP types
     if host1_ip_type and host2_ip_type:
-        if not host1.version == host2.version:
+        if host1.version != host2.version:
             return False
         host1_net = ipaddress.ip_network(host1)
         host2_net = ipaddress.ip_network(host2)
         return host1_net.subnet_of(host2_net)
 
-    # else hostnames
     elif not (host1_ip_type or host2_ip_type):
         host2_len = len(host2.split("."))
         host1_truncated = ".".join(host1.split(".")[-host2_len:])
@@ -335,7 +326,7 @@ def chain_lists(l, try_files=False, msg=None):
         - try_files=True:
             - ["a,file.txt", "c,d"] --> ["a", "f_line1", "f_line2", "f_line3", "c", "d"]
     """
-    final_list = dict()
+    final_list = {}
     for entry in l:
         for s in entry.split(","):
             f = s.strip()
@@ -413,8 +404,7 @@ def which(*executables):
     "python" --> "/usr/bin/python"
     """
     for e in executables:
-        location = shutil.which(e)
-        if location:
+        if location := shutil.which(e):
             return location
 
 
@@ -460,9 +450,8 @@ def filter_dict(d, *key_names, fuzzy=False, invert=False):
         for key in d:
             if key in key_names or (fuzzy and any(k in key for k in key_names)):
                 ret[key] = copy.deepcopy(d[key])
-            elif isinstance(d[key], list) or isinstance(d[key], dict):
-                child = filter_dict(d[key], *key_names, fuzzy=fuzzy)
-                if child:
+            elif isinstance(d[key], (list, dict)):
+                if child := filter_dict(d[key], *key_names, fuzzy=fuzzy):
                     ret[key] = child
     return ret
 
@@ -541,10 +530,7 @@ def get_file_extension(s):
     """
     s = str(s).lower().strip()
     rightmost_section = s.rsplit("/", 1)[-1]
-    if "." in rightmost_section:
-        extension = rightmost_section.rsplit(".", 1)[-1]
-        return extension
-    return ""
+    return rightmost_section.rsplit(".", 1)[-1] if "." in rightmost_section else ""
 
 
 def backup_file(filename, max_backups=10):
@@ -581,12 +567,8 @@ def latest_mtime(d):
     """
     d = Path(d).resolve()
     mtimes = [d.lstat().st_mtime]
-    if d.is_dir():
-        to_list = d.glob("**/*")
-    else:
-        to_list = [d]
-    for e in to_list:
-        mtimes.append(e.lstat().st_mtime)
+    to_list = d.glob("**/*") if d.is_dir() else [d]
+    mtimes.extend(e.lstat().st_mtime for e in to_list)
     return max(mtimes)
 
 

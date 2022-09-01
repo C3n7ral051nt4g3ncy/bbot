@@ -18,10 +18,9 @@ class leakix(crobat):
         try:
             j = r.json()
         except Exception:
-            self.warning(f"Error decoding JSON")
+            self.warning("Error decoding JSON")
             return
-        services = j.get("Services", [])
-        if services:
+        if services := j.get("Services", []):
             for s in services:
                 if s.get("event_type", "") != "service":
                     continue
@@ -37,14 +36,11 @@ class leakix(crobat):
                 if not certificate:
                     continue
                 cert_domains = set()
-                cn = self.clean_dns_name(certificate.get("cn", ""))
-                if cn:
+                if cn := self.clean_dns_name(certificate.get("cn", "")):
                     cert_domains.add(cn)
-                domains = certificate.get("domain", [])
-                if domains:
+                if domains := certificate.get("domain", []):
                     for d in domains:
-                        d = self.clean_dns_name(d)
-                        if d:
+                        if d := self.clean_dns_name(d):
                             cert_domains.add(d)
                 for d in cert_domains:
                     if d != host:

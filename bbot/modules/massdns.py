@@ -38,16 +38,16 @@ class massdns(crobat):
     ]
 
     def setup(self):
-        self.found = dict()
+        self.found = {}
         self.mutations_tried = set()
-        self.source_events = dict()
+        self.source_events = {}
         self.subdomain_file = self.helpers.wordlist(self.config.get("wordlist"))
         return super().setup()
 
     def handle_event(self, event):
         query = self.make_query(event)
         h = hash(query)
-        if not h in self.source_events:
+        if h not in self.source_events:
             self.source_events[h] = event
 
         # wildcard sanity check
@@ -60,8 +60,13 @@ class massdns(crobat):
             self.emit_result(hostname, event, query)
 
     def emit_result(self, result, source_event, query):
-        if not result == source_event:
-            kwargs = {"abort_if": lambda e: any([x in e.tags for x in ("wildcard", "unresolved")])}
+        if result != source_event:
+            kwargs = {
+                "abort_if": lambda e: any(
+                    x in e.tags for x in ("wildcard", "unresolved")
+                )
+            }
+
             if result.endswith(f".{query}"):
                 kwargs["on_success_callback"] = self.add_found
             self.emit_event(result, "DNS_NAME", source_event, **kwargs)
@@ -122,8 +127,7 @@ class massdns(crobat):
             answers = j.get("data", {}).get("answers", [])
             if type(answers) == list:
                 for answer in answers:
-                    hostname = answer.get("name", "")
-                    if hostname:
+                    if hostname := answer.get("name", ""):
                         data = answer.get("data", "")
                         # avoid garbage answers like this:
                         # 8AAAA queries have been locally blocked by dnscrypt-proxy/Set block_ipv6 to false to disable this feature
@@ -164,7 +168,7 @@ class massdns(crobat):
             try:
                 self.found[domain].add(subdomain)
             except KeyError:
-                self.found[domain] = set((subdomain,))
+                self.found[domain] = {subdomain}
 
     def gen_subdomains(self, prefixes, domain):
         for p in prefixes:

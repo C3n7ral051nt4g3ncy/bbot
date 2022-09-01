@@ -80,7 +80,7 @@ def validate_url_parsed(url):
 @validator
 def validate_severity(severity):
     severity = str(severity).strip().upper()
-    if not severity in ("INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"):
+    if severity not in {"INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"}:
         raise ValueError(f"Invalid severity: {severity}")
     return severity
 

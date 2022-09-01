@@ -78,7 +78,7 @@ class BaseEvent:
         self.module = module
         self.scan = scan
         if (not self.scan) and (not self._dummy):
-            raise ValidationError(f"Must specify scan")
+            raise ValidationError("Must specify scan")
 
         # check type blacklist
         if self.scan is not None:
@@ -103,16 +103,14 @@ class BaseEvent:
         self.source_id = None
         self.source = source
         if (not self.source) and (not self._dummy):
-            raise ValidationError(f"Must specify event source")
+            raise ValidationError("Must specify event source")
 
         if not self._dummy:
             self._setup()
 
         # internal events are not ingested by output modules
-        if not self._dummy:
-            # removed this second part because it was making certain sslcert events internal
-            if _internal:  # or source._internal:
-                self.make_internal()
+        if not self._dummy and _internal:
+            self.make_internal()
 
         self._resolved = ThreadingEvent()
 
@@ -182,18 +180,19 @@ class BaseEvent:
 
     @scope_distance.setter
     def scope_distance(self, scope_distance):
-        if scope_distance >= 0:
-            new_scope_distance = None
-            # ensure scope distance does not increase (only allow setting to smaller values)
-            if self.scope_distance == -1:
-                new_scope_distance = scope_distance
-            else:
-                new_scope_distance = min(self.scope_distance, scope_distance)
-            self._scope_distance = new_scope_distance
-            for t in list(self.tags):
-                if t.startswith("distance-"):
-                    self.tags.remove(t)
-            self.tags.add(f"distance-{new_scope_distance}")
+        if scope_distance < 0:
+            return
+        new_scope_distance = None
+        # ensure scope distance does not increase (only allow setting to smaller values)
+        if self.scope_distance == -1:
+            new_scope_distance = scope_distance
+        else:
+            new_scope_distance = min(self.scope_distance, scope_distance)
+        self._scope_distance = new_scope_distance
+        for t in list(self.tags):
+            if t.startswith("distance-"):
+                self.tags.remove(t)
+        self.tags.add(f"distance-{new_scope_distance}")
 
     @property
     def source(self):
@@ -206,7 +205,7 @@ class BaseEvent:
             if source.scope_distance >= 0 and source != self:
                 new_scope_distance = int(source.scope_distance)
                 # only increment the scope distance if the host changes
-                if not self.host == source.host:
+                if self.host != source.host:
                     new_scope_distance += 1
                 self.scope_distance = new_scope_distance
             self.source_id = str(source.id)
@@ -323,34 +322,26 @@ class BaseEvent:
             return True
         # if hosts match
         if self.host and other.host:
-            if self.host == other.host:
-                return True
-            # hostnames and IPs
-            return host_in_host(other.host, self.host)
+            return True if self.host == other.host else host_in_host(other.host, self.host)
         return False
 
     def json(self, mode="graph"):
-        j = dict()
+        j = {}
         for i in ("type", "id", "web_spider_distance"):
-            v = getattr(self, i, "")
-            if v:
-                j.update({i: v})
+            if v := getattr(self, i, ""):
+                j[i] = v
         data_attr = getattr(self, f"data_{mode}", None)
-        if data_attr is not None:
-            j["data"] = data_attr
-        else:
-            j["data"] = smart_decode(self.data)
+        j["data"] = data_attr if data_attr is not None else smart_decode(self.data)
         j["scope_distance"] = self.scope_distance
         j["scan"] = self.scan.id
         j["timestamp"] = self.timestamp.timestamp()
         source = self.get_source()
-        source_id = getattr(source, "id", "")
-        if source_id:
+        if source_id := getattr(source, "id", ""):
             j["source"] = source_id
         if self.tags:
-            j.update({"tags": list(self.tags)})
+            j["tags"] = list(self.tags)
         if self.module:
-            j.update({"module": str(self.module)})
+            j["module"] = str(self.module)
 
         # normalize non-primitive python objects
         for k, v in list(j.items()):
@@ -380,13 +371,13 @@ class BaseEvent:
         """
         For queue sorting
         """
-        return self.priority < int(getattr(other, "priority", 5))
+        return self.priority < getattr(other, "priority", 5)
 
     def __gt__(self, other):
         """
         For queue sorting
         """
-        return self.priority > int(getattr(other, "priority", 5))
+        return self.priority > getattr(other, "priority", 5)
 
     def __eq__(self, other):
         try:
@@ -496,9 +487,7 @@ class OPEN_TCP_PORT(BaseEvent):
         return host
 
     def _words(self):
-        if not is_ip(self.host):
-            return extract_words(self.host_stem)
-        return set()
+        return set() if is_ip(self.host) else extract_words(self.host_stem)
 
 
 class URL_UNVERIFIED(BaseEvent):
@@ -524,8 +513,7 @@ class URL_UNVERIFIED(BaseEvent):
             url_extension_blacklist = [e.lower() for e in scan.config.get("url_extension_blacklist", [])]
             url_extension_httpx_only = [e.lower() for e in scan.config.get("url_extension_httpx_only", [])]
 
-        extension = get_file_extension(parsed_path_lower)
-        if extension:
+        if extension := get_file_extension(parsed_path_lower):
             self.tags.add(f"extension-{extension}")
             if extension in url_extension_blacklist:
                 self.tags.add("blacklisted")
@@ -542,9 +530,7 @@ class URL_UNVERIFIED(BaseEvent):
 
     def _words(self):
         first_elem = self.parsed.path.lstrip("/").split("/")[0]
-        if not "." in first_elem:
-            return extract_words(first_elem)
-        return set()
+        return extract_words(first_elem) if "." not in first_elem else set()
 
     def _host(self):
         return make_ip_type(self.parsed.hostname)
@@ -714,7 +700,7 @@ def make_event(
         # Catch these common whoopsies
 
         # DNS_NAME <--> IP_ADDRESS confusion
-        if event_type in ("DNS_NAME", "IP_ADDRESS"):
+        if event_type in {"DNS_NAME", "IP_ADDRESS"}:
             try:
                 data = validators.validate_host(data)
             except Exception as e:
@@ -726,7 +712,7 @@ def make_event(
                 event_type = "DNS_NAME"
 
         # DNS_NAME <--> EMAIL_ADDRESS confusion
-        if event_type in ("DNS_NAME", "EMAIL_ADDRESS"):
+        if event_type in {"DNS_NAME", "EMAIL_ADDRESS"}:
             data_is_email = validators.soft_validate(data, "email")
             if event_type == "DNS_NAME" and data_is_email:
                 event_type = "EMAIL_ADDRESS"

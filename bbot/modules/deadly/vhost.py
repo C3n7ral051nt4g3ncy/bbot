@@ -36,44 +36,57 @@ class vhost(BaseModule):
         return True
 
     def handle_event(self, event):
-        if not self.helpers.is_ip(event.host) or self.config.get("force_basehost"):
-            parsed_host = event.parsed
-            host = f"{parsed_host.scheme}://{parsed_host.netloc}/"
-            host_hash = hash(host)
-            if host_hash in self.scanned_hosts:
-                self.debug(f"Host {host} was already scanned, exiting")
-                return
-            else:
-                self.scanned_hosts.add(host_hash)
+        if self.helpers.is_ip(event.host) and not self.config.get(
+            "force_basehost"
+        ):
+            return
+        parsed_host = event.parsed
+        host = f"{parsed_host.scheme}://{parsed_host.netloc}/"
+        host_hash = hash(host)
+        if host_hash in self.scanned_hosts:
+            self.debug(f"Host {host} was already scanned, exiting")
+            return
+        else:
+            self.scanned_hosts.add(host_hash)
 
-            # subdomain vhost check
-            self.debug("Main vhost bruteforce")
-            if self.config.get("force_basehost"):
-                basehostraw = self.config.get("force_basehost")
-            else:
-                basehostraw = self.helpers.parent_domain(event.host)
+        # subdomain vhost check
+        self.debug("Main vhost bruteforce")
+        basehostraw = self.config.get(
+            "force_basehost"
+        ) or self.helpers.parent_domain(event.host)
 
-            self.debug(f"Basehost: {basehostraw}")
-            basehost = f".{basehostraw}"
-            command = ["ffuf", "-ac", "-s", "-w", self.subdomain_wordlist, "-u", host, "-H", f"Host: FUZZ{basehost}"]
-            for vhost in self.ffuf_vhost(command, host, parsed_host, basehost, event):
-                self.debug(f"Starting mutations check for {vhost}")
-                mutations_list_file = self.mutations_check(vhost)
-                command = ["ffuf", "-ac", "-s", "-w", mutations_list_file, "-u", host, "-H", f"Host: FUZZ{basehost}"]
-                self.ffuf_vhost(command, host, parsed_host, event, basehost)
-
-            # check existing host for mutations
-            self.debug("Checking for vhost mutations on main host")
-            mutations_list_file = self.mutations_check(parsed_host.netloc.split(".")[0])
+        self.debug(f"Basehost: {basehostraw}")
+        basehost = f".{basehostraw}"
+        command = ["ffuf", "-ac", "-s", "-w", self.subdomain_wordlist, "-u", host, "-H", f"Host: FUZZ{basehost}"]
+        for vhost in self.ffuf_vhost(command, host, parsed_host, basehost, event):
+            self.debug(f"Starting mutations check for {vhost}")
+            mutations_list_file = self.mutations_check(vhost)
             command = ["ffuf", "-ac", "-s", "-w", mutations_list_file, "-u", host, "-H", f"Host: FUZZ{basehost}"]
-            self.ffuf_vhost(command, host, parsed_host, basehost, event)
+            self.ffuf_vhost(command, host, parsed_host, event, basehost)
 
-            # special vhost list
-            self.debug("Checking special vhost list")
-            basehost = basehostraw
-            special_vhost_list_file = self.helpers.tempfile(self.special_vhost_list)
-            command = ["ffuf", "-ac", "-s", "-w", special_vhost_list_file, "-u", host, "-H", f"Host: FUZZ"]
-            self.ffuf_vhost(command, host, parsed_host, basehost, event, skip_dns_host=True)
+        # check existing host for mutations
+        self.debug("Checking for vhost mutations on main host")
+        mutations_list_file = self.mutations_check(parsed_host.netloc.split(".")[0])
+        command = ["ffuf", "-ac", "-s", "-w", mutations_list_file, "-u", host, "-H", f"Host: FUZZ{basehost}"]
+        self.ffuf_vhost(command, host, parsed_host, basehost, event)
+
+        # special vhost list
+        self.debug("Checking special vhost list")
+        basehost = basehostraw
+        special_vhost_list_file = self.helpers.tempfile(self.special_vhost_list)
+        command = [
+            "ffuf",
+            "-ac",
+            "-s",
+            "-w",
+            special_vhost_list_file,
+            "-u",
+            host,
+            "-H",
+            "Host: FUZZ",
+        ]
+
+        self.ffuf_vhost(command, host, parsed_host, basehost, event, skip_dns_host=True)
 
     def ffuf_vhost(self, command, host, parsed_host, basehost, event, skip_dns_host=False):
         for found_vhost in self.helpers.run_live(command):
@@ -88,7 +101,5 @@ class vhost(BaseModule):
     def mutations_check(self, vhost):
         mutations_list = []
         for mutation in self.helpers.word_cloud.mutations(vhost):
-            for i in ["", ".", "-"]:
-                mutations_list.append(i.join(mutation))
-        mutations_list_file = self.helpers.tempfile(mutations_list)
-        return mutations_list_file
+            mutations_list.extend(i.join(mutation) for i in ["", ".", "-"])
+        return self.helpers.tempfile(mutations_list)

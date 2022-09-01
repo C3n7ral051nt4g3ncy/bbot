@@ -62,7 +62,7 @@ class nuclei(BaseModule):
             cache_hrs=72,
         )
         if not self.template_stats:
-            self.warning(f"Failed to download nuclei template stats.")
+            self.warning("Failed to download nuclei template stats.")
             if self.config.get("mode ") == "technology":
                 self.warning("Can't run with technology_mode set to true without template tags JSON")
                 return False
@@ -113,22 +113,28 @@ class nuclei(BaseModule):
                         reported_tag = technology_map[reported_tag]
                     if reported_tag in self.tag_list:
                         tag = e.data.get("technology", "")
-                        if tag not in tags_to_scan.keys():
-                            tags_to_scan[tag] = [e]
-                        else:
+                        if tag in tags_to_scan:
                             tags_to_scan[tag].append(e)
 
-            self.debug(f"finished processing this batch's tags with {str(len(tags_to_scan.keys()))} total tags")
+                        else:
+                            tags_to_scan[tag] = [e]
+            self.debug(
+                f"finished processing this batch's tags with {len(tags_to_scan.keys())} total tags"
+            )
 
-            for t in tags_to_scan.keys():
+
+            for t in tags_to_scan:
                 nuclei_input = [e.data["url"] for e in tags_to_scan[t]]
                 taglist = self.tags.split(",")
                 taglist.append(t)
                 override_tags = ",".join(taglist).lstrip(",")
-                self.verbose(f"Running nuclei against {str(len(nuclei_input))} host(s) with the {t} tag")
+                self.verbose(
+                    f"Running nuclei against {len(nuclei_input)} host(s) with the {t} tag"
+                )
+
                 for severity, template, host, name in self.execute_nuclei(nuclei_input, override_tags=override_tags):
                     source_event = self.correlate_event(events, host)
-                    if source_event == None:
+                    if source_event is None:
                         continue
                     self.emit_event(
                         {
@@ -145,7 +151,7 @@ class nuclei(BaseModule):
             nuclei_input = [str(e.data) for e in events]
             for severity, template, host, name in self.execute_nuclei(nuclei_input):
                 source_event = self.correlate_event(events, host)
-                if source_event == None:
+                if source_event is None:
                     continue
                 self.emit_event(
                     {
@@ -181,20 +187,16 @@ class nuclei(BaseModule):
         ]
 
         for cli_option in ("severity", "templates", "iserver", "itoken", "etags"):
-            option = getattr(self, cli_option)
-
-            if option:
+            if option := getattr(self, cli_option):
                 command.append(f"-{cli_option}")
                 command.append(option)
 
         if override_tags:
-            command.append(f"-tags")
+            command.append("-tags")
             command.append(override_tags)
-        else:
-            setup_tags = getattr(self, "tags")
-            if setup_tags:
-                command.append(f"-tags")
-                command.append(setup_tags)
+        elif setup_tags := getattr(self, "tags"):
+            command.append("-tags")
+            command.append(setup_tags)
 
         if self.scan.config.get("interactsh_disable") == True:
             self.info("Disbling interactsh in accordance with global settings")

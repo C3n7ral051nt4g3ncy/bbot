@@ -48,8 +48,7 @@ class gowitness(BaseModule):
         self.proxy = self.scan.config.get("http_proxy", "")
         self.resolution_x = self.config.get("resolution_x")
         self.resolution_y = self.config.get("resolution_y")
-        output_path = self.config.get("output_path")
-        if output_path:
+        if output_path := self.config.get("output_path"):
             self.base_path = Path(output_path) / "gowitness"
         else:
             self.base_path = self.scan.home / "gowitness"
@@ -70,9 +69,7 @@ class gowitness(BaseModule):
 
     def filter_event(self, event):
         # Ignore URLs that are redirects
-        if any(t.startswith("status-30") for t in event.tags):
-            return False
-        return True
+        return not any(t.startswith("status-30") for t in event.tags)
 
     def handle_batch(self, *events):
         self.prep()

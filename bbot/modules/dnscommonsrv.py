@@ -97,9 +97,7 @@ class dnscommonsrv(BaseModule):
 
     def filter_event(self, event):
         is_wildcard, _ = self.helpers.is_wildcard(event.host)
-        if is_wildcard:
-            return False
-        return True
+        return not is_wildcard
 
     def handle_event(self, event):
         queries = [event.data] + [f"{srv}.{event.data}" for srv in common_srvs]

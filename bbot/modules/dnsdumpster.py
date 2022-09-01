@@ -19,7 +19,7 @@ class dnsdumpster(crobat):
         # first, get the CSRF tokens
         res1 = self.helpers.request(self.base_url)
         status_code = getattr(res1, "status_code", 0)
-        if status_code in [429]:
+        if status_code in {429}:
             self.warning(f'Too many requests "{status_code}"')
             return ret
         elif status_code not in [200]:
@@ -54,8 +54,6 @@ class dnsdumpster(crobat):
         if self.scan.stopping:
             return
 
-        # Otherwise, do the needful
-        subdomains = set()
         res2 = self.helpers.request(
             f"{self.base_url}/",
             method="POST",
@@ -78,7 +76,9 @@ class dnsdumpster(crobat):
         html = BeautifulSoup(res2.content, features="lxml")
         escaped_domain = re.escape(domain)
         match_pattern = re.compile(r"^[\w\.-]+\." + escaped_domain + r"$")
-        for subdomain in html.findAll(text=match_pattern):
-            subdomains.add(str(subdomain).strip().lower())
+        subdomains = {
+            str(subdomain).strip().lower()
+            for subdomain in html.findAll(text=match_pattern)
+        }
 
         return list(subdomains)

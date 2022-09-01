@@ -98,22 +98,26 @@ class ntlm(BaseModule):
     def filter_event(self, event):
         if self.try_all:
             return True
-        if event.type == "HTTP_RESPONSE":
-            if "www-authenticate" in event.data["header-dict"]:
-                header_value = event.data["header-dict"]["www-authenticate"].lower()
-                if "ntlm" in header_value or "negotiate" in header_value:
-                    return True
+        if (
+            event.type == "HTTP_RESPONSE"
+            and "www-authenticate" in event.data["header-dict"]
+        ):
+            header_value = event.data["header-dict"]["www-authenticate"].lower()
+            if "ntlm" in header_value or "negotiate" in header_value:
+                return True
         return False
 
     def handle_url(self, event):
-        if event.type == "URL":
-            urls = {
+        urls = (
+            {
                 event.data,
             }
-        else:
-            urls = {
+            if event.type == "URL"
+            else {
                 event.data["url"],
             }
+        )
+
         if self.try_all:
             for endpoint in ntlm_discovery_endpoints:
                 urls.add(f"{event.parsed.scheme}://{event.parsed.netloc}/{endpoint}")
@@ -126,8 +130,7 @@ class ntlm(BaseModule):
         for future in self.helpers.as_completed(futures):
             url = futures[future]
             try:
-                result = future.result()
-                if result:
+                if result := future.result():
                     for future in futures:
                         future.cancel()
                     return str(result["FQDN"]), url
@@ -150,12 +153,12 @@ class ntlm(BaseModule):
         r = self.helpers.request(
             test_url, headers=NTLM_test_header, raise_error=True, allow_redirects=False, timeout=http_timeout
         )
-        ntlm_resp = r.headers.get("WWW-Authenticate", "")
-        if ntlm_resp:
+        if ntlm_resp := r.headers.get("WWW-Authenticate", ""):
             ntlm_resp_b64 = max(ntlm_resp.split(","), key=lambda x: len(x)).split()[-1]
             try:
-                ntlm_resp_decoded = self.helpers.ntlm.ntlmdecode(ntlm_resp_b64)
-                if ntlm_resp_decoded:
+                if ntlm_resp_decoded := self.helpers.ntlm.ntlmdecode(
+                    ntlm_resp_b64
+                ):
                     return ntlm_resp_decoded
             except NTLMError as e:
                 self.verbose(str(e))

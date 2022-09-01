@@ -41,7 +41,7 @@ class header_brute(BaseModule):
             self.debug(e)
             return
         batch_size = self.count_test(url)
-        if batch_size == None or batch_size <= 0:
+        if batch_size is None or batch_size <= 0:
             self.debug(f"Failed to get baseline max {self.compare_mode} count, aborting")
             return
         self.debug(f"Resolved batch_size at {str(batch_size)}")
@@ -94,24 +94,26 @@ class header_brute(BaseModule):
             return
         for count, args, kwargs in self.gen_count_args(url):
             r = self.helpers.request(*args, **kwargs)
-            if r is not None and not ((str(r.status_code)[0] in ("4", "5"))):
+            if r is not None and str(r.status_code)[0] not in ("4", "5"):
                 return count
 
     def gen_count_args(self, url):
         header_count = 95
-        while 1:
-            if header_count < 0:
-                break
-            fake_headers = {}
-            for i in range(0, header_count):
-                fake_headers[self.helpers.rand_string(14)] = self.helpers.rand_string(14)
+        while 1 and header_count >= 0:
+            fake_headers = {
+                self.helpers.rand_string(14): self.helpers.rand_string(14)
+                for _ in range(header_count)
+            }
+
             yield header_count, (url,), {"headers": fake_headers}
             header_count -= 5
 
     def clean_list(self, header):
-        if (len(header) > 0) and ("%" not in header) and (header not in self.header_blacklist):
-            return True
-        return False
+        return (
+            len(header) > 0
+            and "%" not in header
+            and header not in self.header_blacklist
+        )
 
     def binary_search(self, compare_helper, url, group, reason=None, reflection=False):
         self.debug(f"Entering recursive binary_search with {len(group):,} sized group")
@@ -123,14 +125,12 @@ class header_brute(BaseModule):
                 if match == False:
                     yield from self.binary_search(compare_helper, url, group_slice, reason, reflection)
         else:
-            self.warning(f"Submitted group of size 0 to binary_search()")
+            self.warning("Submitted group of size 0 to binary_search()")
 
     def check_batch(self, compare_helper, url, header_list):
 
         if self.scan.stopping:
             raise ScanCancelledError()
         rand = self.helpers.rand_string()
-        test_headers = {}
-        for header in header_list:
-            test_headers[header] = rand
+        test_headers = {header: rand for header in header_list}
         return compare_helper.compare(url, headers=test_headers, check_reflection=(len(header_list) == 1))

@@ -25,7 +25,7 @@ class Interactsh:
         self._thread = None
 
     def register(self, callback=None):
-        if self.server == None:
+        if self.server is None:
             self.server = random.choice(server_list)
 
         rsa = RSA.generate(1024)
@@ -87,14 +87,12 @@ class Interactsh:
             f"https://{self.server}/poll?id={self.correlation_id}&secret={self.secret}", headers=headers
         )
 
-        data_list = r.json().get("data", None)
-        if data_list:
+        if data_list := r.json().get("data", None):
             aes_key = r.json()["aes_key"]
 
             for data in data_list:
 
-                decrypted_data = self.decrypt(aes_key, data)
-                yield decrypted_data
+                yield self.decrypt(aes_key, data)
 
     def poll_loop(self, callback):
         return self.parent_helper.scan.manager.catch(self._poll_loop, callback, _force=True)

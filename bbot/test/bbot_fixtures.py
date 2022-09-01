@@ -43,10 +43,7 @@ def neuter_ansible(monkeypatch):
 
     def ansible_run(*args, **kwargs):
         module = kwargs.get("module", "")
-        if module != "pip":
-            return AnsibleRunnerResult()
-        else:
-            return run(*args, **kwargs)
+        return AnsibleRunnerResult() if module != "pip" else run(*args, **kwargs)
 
     from bbot.core.helpers.depsinstaller import installer
 
@@ -221,8 +218,7 @@ def patch_commands(monkeypatch):
         return subprocess.run(["echo", "\n".join(sample_output)], text=text, stdout=subprocess.PIPE)
 
     def run_live(*args, **kwargs):
-        for line in sample_output:
-            yield line
+        yield from sample_output
 
     from bbot.core.helpers.command import run as old_run, run_live as old_run_live
 
@@ -234,18 +230,22 @@ def patch_commands(monkeypatch):
 
 @pytest.fixture
 def agent(monkeypatch):
+
+
+
     class WebSocketApp:
-        def __init__(*args, **kwargs):
+        def __init__(self, **kwargs):
             return
 
         def send(self, message):
             assert type(message) == str
 
-        def run_forever(*args, **kwargs):
+        def run_forever(self, **kwargs):
             return False
 
         def close(self):
             return
+
 
     from bbot import agent
     from bbot.modules.output.websocket import Websocket

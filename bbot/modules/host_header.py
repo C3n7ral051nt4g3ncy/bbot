@@ -27,8 +27,7 @@ class host_header(BaseModule):
         return True
 
     def interactsh_callback(self, r):
-        full_id = r.get("full-id", None)
-        if full_id:
+        if full_id := r.get("full-id", None):
             if "." in full_id:
                 match = self.interactsh_subdomain_tags.get(full_id.split(".")[0])
                 self.hugewarning(match)
@@ -126,11 +125,12 @@ class host_header(BaseModule):
                 {
                     "host": str(event.host),
                     "url": event.data["url"],
-                    "description": f"Duplicate Host Header Tolerated",
+                    "description": "Duplicate Host Header Tolerated",
                 },
                 "FINDING",
                 event,
             )
+
 
         # Host Header Overrides
 
@@ -149,9 +149,10 @@ class host_header(BaseModule):
             "X-HTTP-Host-Override",
             "Forwarded",
         ]
-        override_headers = {}
-        for oh in override_headers_list:
-            override_headers[oh] = f"{subdomain_tag}.{self.interactsh_domain}"
+        override_headers = {
+            oh: f"{subdomain_tag}.{self.interactsh_domain}"
+            for oh in override_headers_list
+        }
 
         output = self.helpers.curl(
             url=event.data["url"],

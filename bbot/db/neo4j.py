@@ -33,7 +33,7 @@ class Neo4j:
         self.graph.merge(relationship)
 
     def insert_events(self, events):
-        event_nodes = dict()
+        event_nodes = {}
         event_list = []
 
         for event in events:

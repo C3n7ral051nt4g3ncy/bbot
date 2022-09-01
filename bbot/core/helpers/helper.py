@@ -42,7 +42,7 @@ class ConfigAwareHelper:
         self.mkdir(self.lib_dir)
         atexit.register(self.empty_temp_dir)
         # holds requests CachedSession() objects for duration of scan
-        self.cache_sessions = dict()
+        self.cache_sessions = {}
         self._futures = set()
         self._future_lock = Lock()
 

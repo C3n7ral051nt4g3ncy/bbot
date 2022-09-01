@@ -170,9 +170,7 @@ class BaseModule:
     def catch(self, *args, **kwargs):
         try:
             lock_brutes = kwargs.pop("_lock_brutes", False) and "brute-force" in self.flags
-            lock_acquired = False
-            if lock_brutes:
-                lock_acquired = self.scan._brute_lock.acquire()
+            lock_acquired = self.scan._brute_lock.acquire() if lock_brutes else False
             return self.scan.manager.catch(*args, **kwargs)
         finally:
             if lock_brutes and lock_acquired:
@@ -218,12 +216,10 @@ class BaseModule:
         on_success_callback = kwargs.pop("on_success_callback", None)
         abort_if = kwargs.pop("abort_if", lambda e: False)
         quick = kwargs.pop("quick", False)
-        event = self.make_event(*args, **kwargs)
-        if event:
+        if event := self.make_event(*args, **kwargs):
             okay = False
             while not self.scan.stopping:
-                okay = self._event_semaphore.acquire(timeout=0.1)
-                if okay:
+                if okay := self._event_semaphore.acquire(timeout=0.1):
                     self.scan.manager.emit_event(
                         event,
                         abort_if=abort_if,
@@ -258,10 +254,7 @@ class BaseModule:
 
     @property
     def num_queued_events(self):
-        ret = 0
-        if self.event_queue:
-            ret = self.event_queue.qsize()
-        return ret
+        return self.event_queue.qsize() if self.event_queue else 0
 
     def start(self):
         self.thread = threading.Thread(target=self._worker, daemon=True)
@@ -302,9 +295,7 @@ class BaseModule:
             return True
         # if there's a batch stalemate
         batch_modules = [m for m in self.scan.modules.values() if m.batch_size > 1]
-        if all([(not m.running) for m in batch_modules]):
-            return True
-        return False
+        return all(not m.running for m in batch_modules)
 
     def _worker(self):
         # keep track of how long we've been running
@@ -327,7 +318,7 @@ class BaseModule:
                         if self.event_queue:
                             e = self.event_queue.get_nowait()
                         else:
-                            self.debug(f"Event queue is in bad state")
+                            self.debug("Event queue is in bad state")
                             return
                     except queue.Empty:
                         sleep(0.3333)
@@ -339,14 +330,13 @@ class BaseModule:
                             self._internal_thread_pool.submit_task(self.catch, self.finish)
                         elif e == "REPORT":
                             self._internal_thread_pool.submit_task(self.catch, self.report)
+                    elif self._type == "output":
+                        self.catch(self.handle_event, e)
                     else:
-                        if self._type == "output":
-                            self.catch(self.handle_event, e)
-                        else:
-                            self._internal_thread_pool.submit_task(self.catch, self.handle_event, e, _lock_brutes=True)
+                        self._internal_thread_pool.submit_task(self.catch, self.handle_event, e, _lock_brutes=True)
 
         except KeyboardInterrupt:
-            self.debug(f"Interrupted")
+            self.debug("Interrupted")
             self.scan.stop()
         except ScanCancelledError as e:
             self.verbose(f"Scan cancelled, {e}")
@@ -357,12 +347,9 @@ class BaseModule:
     def _filter_event(self, event):
         # special "FINISHED" event
         if type(event) == str:
-            if event in ("FINISHED", "REPORT"):
-                return True
-            else:
-                return False
+            return event in ("FINISHED", "REPORT")
         # exclude non-watched types
-        if not any(t in self.get_watched_events() for t in ("*", event.type)):
+        if all(t not in self.get_watched_events() for t in ("*", event.type)):
             return False
         # built-in filtering based on scope distance, etc.
         acceptable, reason = self.event_acceptable(event)
@@ -393,14 +380,12 @@ class BaseModule:
         """
         acceptable = True
         reason = ""
-        if self.target_only:
-            if "target" not in e.tags:
-                acceptable = False
-                reason = "it did not meet target_only filter criteria"
-        if self.in_scope_only:
-            if e.scope_distance > 0:
-                acceptable = False
-                reason = "it did not meet in_scope_only filter criteria"
+        if self.target_only and "target" not in e.tags:
+            acceptable = False
+            reason = "it did not meet target_only filter criteria"
+        if self.in_scope_only and e.scope_distance > 0:
+            acceptable = False
+            reason = "it did not meet in_scope_only filter criteria"
         if self.scope_distance_modifier is not None:
             if e.scope_distance < 0:
                 acceptable = False
@@ -411,13 +396,17 @@ class BaseModule:
 
         # if the event is an IP address that came from a CIDR
         source_is_range = getattr(e.source, "type", "") == "IP_RANGE"
-        if source_is_range and e.type == "IP_ADDRESS" and str(e.module) == "speculate" and self.name != "speculate":
-            # and the current module listens for both ranges and CIDRs
-            if all([x in self.watched_events for x in ("IP_RANGE", "IP_ADDRESS")]):
-                # then skip the event.
-                # this helps avoid double-portscanning both an individual IP and its parent CIDR.
-                acceptable = False
-                reason = "module consumes IP ranges directly"
+        if (
+            source_is_range
+            and e.type == "IP_ADDRESS"
+            and str(e.module) == "speculate"
+            and self.name != "speculate"
+            and all(x in self.watched_events for x in ("IP_RANGE", "IP_ADDRESS"))
+        ):
+            # then skip the event.
+            # this helps avoid double-portscanning both an individual IP and its parent CIDR.
+            acceptable = False
+            reason = "module consumes IP ranges directly"
 
         return acceptable, reason
 
@@ -429,13 +418,13 @@ class BaseModule:
                     self.catch(callback, _force=True)
 
     def queue_event(self, e):
-        if self.event_queue is not None and not self.errored:
-            if self._filter_event(e):
-                if is_event(e):
-                    self.scan.stats.event_consumed(e, self)
-                self.event_queue.put(e)
-        else:
-            self.debug(f"Not in an acceptable state to queue event")
+        if self.event_queue is None or self.errored:
+            self.debug("Not in an acceptable state to queue event")
+
+        elif self._filter_event(e):
+            if is_event(e):
+                self.scan.stats.event_consumed(e, self)
+            self.event_queue.put(e)
 
     def set_error_state(self, message=None):
         if message is not None:
@@ -445,7 +434,7 @@ class BaseModule:
             self.errored = True
             # clear incoming queue
             if self.event_queue:
-                self.debug(f"Emptying event_queue")
+                self.debug("Emptying event_queue")
                 with suppress(queue.Empty):
                     while 1:
                         self.event_queue.get_nowait()
@@ -466,9 +455,7 @@ class BaseModule:
         main_pool = self.thread_pool.num_tasks
         internal_pool = self._internal_thread_pool.num_tasks
         pool_total = main_pool + internal_pool
-        incoming_qsize = 0
-        if self.event_queue:
-            incoming_qsize = self.event_queue.qsize()
+        incoming_qsize = self.event_queue.qsize() if self.event_queue else 0
         outgoing_qsize = self._qsize - self._event_semaphore._value
         status = {
             "events": {"incoming": incoming_qsize, "outgoing": outgoing_qsize},
@@ -480,10 +467,7 @@ class BaseModule:
 
     @staticmethod
     def _is_running(module_status):
-        for pool, count in module_status["tasks"].items():
-            if count > 0:
-                return True
-        return False
+        return any(count > 0 for pool, count in module_status["tasks"].items())
 
     @property
     def running(self):

@@ -31,14 +31,8 @@ event_type_regexes = OrderedDict(
     [
         (k, tuple(re.compile(r, re.I) for r in regexes))
         for k, regexes in [
-            (
-                "DNS_NAME",
-                (r"^" + _dns_name_regex + r"$",),
-            ),
-            (
-                "EMAIL_ADDRESS",
-                (r"^" + _email_regex + r"$",),
-            ),
+            ("DNS_NAME", (f"^{_dns_name_regex}$",)),
+            ("EMAIL_ADDRESS", (f"^{_email_regex}$",)),
             (
                 "OPEN_TCP_PORT",
                 (
@@ -56,6 +50,7 @@ event_type_regexes = OrderedDict(
         ]
     ]
 )
+
 
 event_id_regex = re.compile(r"[0-9a-f]{40}:[A-Z0-9_]+")
 dns_name_regex = re.compile(_dns_name_regex, re.I)

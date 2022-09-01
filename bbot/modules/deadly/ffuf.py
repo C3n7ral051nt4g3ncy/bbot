@@ -45,7 +45,10 @@ class ffuf(BaseModule):
 
     def setup(self):
 
-        self.sanity_canary = "".join(random.choice(string.ascii_lowercase) for i in range(10))
+        self.sanity_canary = "".join(
+            random.choice(string.ascii_lowercase) for _ in range(10)
+        )
+
         wordlist_url = self.config.get("wordlist", "")
         self.wordlist = self.helpers.wordlist(wordlist_url)
         self.tempfile = self.generate_templist(self.wordlist)
@@ -53,7 +56,7 @@ class ffuf(BaseModule):
 
     def handle_event(self, event):
         if self.helpers.url_depth(event.data) > self.config.get("max_depth"):
-            self.debug(f"Exceeded max depth, aborting event")
+            self.debug("Exceeded max depth, aborting event")
             return
 
         # only FFUF against a directory
@@ -94,12 +97,9 @@ class ffuf(BaseModule):
 
     def generate_templist(self, wordlist, prefix=None):
 
-        f = open(wordlist, "r")
-        fl = f.readlines()
-        f.close()
-
-        virtual_file = []
-        virtual_file.append(self.sanity_canary)
+        with open(wordlist, "r") as f:
+            fl = f.readlines()
+        virtual_file = [self.sanity_canary]
         for idx, val in enumerate(fl):
             if idx > self.config.get("lines"):
                 break
@@ -107,7 +107,6 @@ class ffuf(BaseModule):
 
                 if val.strip().lower() in self.blacklist:
                     self.debug(f"Skipping adding [{val.strip()}] to wordlist because it was in the blacklist")
-                else:
-                    if not prefix or val.startswith(prefix):
-                        virtual_file.append(f"{val.strip()}")
+                elif not prefix or val.startswith(prefix):
+                    virtual_file.append(f"{val.strip()}")
         return self.helpers.tempfile(virtual_file, pipe=False)

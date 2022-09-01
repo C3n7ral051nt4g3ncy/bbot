@@ -65,19 +65,13 @@ class naabu(BaseModule):
             host = j.get("host", j.get("ip"))
             port = j.get("port")
 
-            source_event = None
-            # check exact matches first
-            for event in events:
-                if host == str(event.host):
-                    source_event = event
-                    break
+            source_event = next(
+                (event for event in events if host == str(event.host)), None
+            )
+
             # then make a broader check, for cidrs etc.
             if source_event is None:
-                intermediary_event = None
-                for event in events:
-                    if host in event:
-                        intermediary_event = event
-                        break
+                intermediary_event = next((event for event in events if host in event), None)
                 if intermediary_event is not None:
                     source_event = self.make_event(host, "IP_ADDRESS", source=intermediary_event)
                     self.emit_event(source_event)
@@ -98,10 +92,7 @@ class naabu(BaseModule):
             # "-r",
             # self.helpers.resolver_file
         ]
-        if ports:
-            command += ["-p", ports]
-        else:
-            command += ["-top-ports", top_ports]
+        command += ["-p", ports] if ports else ["-top-ports", top_ports]
         return command
 
     def cleanup(self):

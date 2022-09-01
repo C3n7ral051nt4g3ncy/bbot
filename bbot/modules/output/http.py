@@ -46,8 +46,7 @@ class HTTP(BaseOutputModule):
         password = self.config.get("password", "")
         if username:
             r.auth = HTTPBasicAuth(username, password)
-        bearer = self.config.get("bearer", "")
-        if bearer:
+        if bearer := self.config.get("bearer", ""):
             r.headers["Authorization"] = f"Bearer {bearer}"
         try:
             timeout = self.config.get("timeout", 10)

@@ -55,7 +55,7 @@ class URLExtractor(BaseExtractor):
         tags = []
         parsed = getattr(event, "parsed", None)
 
-        if (name == "a-tag" or name == "script-tag") and parsed:
+        if name in ["a-tag", "script-tag"] and parsed:
             path = html.unescape(result[1]).lstrip("/")
             if not path.startswith("http://") and not path.startswith("https://"):
                 result = f"{event.parsed.scheme}://{event.parsed.netloc}/{path}"
@@ -125,9 +125,7 @@ class JWTExtractor(BaseExtractor):
         try:
             j.decode(result, options={"verify_signature": False})
             jwt_headers = j.get_unverified_header(result)
-            tags = []
-            if jwt_headers["alg"].upper()[0:2] == "HS":
-                tags = ["crackable"]
+            tags = ["crackable"] if jwt_headers["alg"].upper()[:2] == "HS" else []
             description = f"JWT Identified [{result}]"
             self.excavate.emit_event(
                 {"host": str(event.host), "url": event.data.get("url", ""), "description": description},
@@ -237,9 +235,7 @@ class excavate(BaseInternalModule):
         # HTTP_RESPONSE is a special case
         if event.type == "HTTP_RESPONSE":
 
-            # handle redirects
-            location = event.data.get("location", "")
-            if location:
+            if location := event.data.get("location", ""):
                 if not location.lower().startswith("http"):
                     location = event.parsed._replace(path=location).geturl()
                 self.emit_event(location, "URL_UNVERIFIED", event)

@@ -27,8 +27,7 @@ class zoomeye(shodan_dns):
 
     def handle_event(self, event):
         query = self.make_query(event)
-        results = self.query(query)
-        if results:
+        if results := self.query(query):
             for hostname in results:
                 if hostname == event:
                     continue

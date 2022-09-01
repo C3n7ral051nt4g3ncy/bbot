@@ -43,7 +43,10 @@ class ffuf_shortnames(ffuf):
     }
 
     def setup(self):
-        self.sanity_canary = "".join(random.choice(string.ascii_lowercase) for i in range(10))
+        self.sanity_canary = "".join(
+            random.choice(string.ascii_lowercase) for _ in range(10)
+        )
+
         wordlist = self.config.get("wordlist", "")
         self.wordlist = self.helpers.wordlist(wordlist)
         return True
@@ -59,13 +62,10 @@ class ffuf_shortnames(ffuf):
 
         if "file" in event.tags:
             extension_hint = event.parsed.path.rsplit(".", 1)[1]
-            used_extensions = []
-            used_extensions.append(extension_hint)
+            used_extensions = [extension_hint]
             for ex in self.extension_helper.keys():
                 if extension_hint == ex:
-                    for ex2 in self.extension_helper[ex]:
-                        used_extensions.append(ex2)
-
+                    used_extensions.extend(iter(self.extension_helper[ex]))
             for ext in used_extensions:
                 for r in self.execute_ffuf(tempfile, event, root_url, suffix=f".{ext}"):
                     self.emit_event(r["url"], "URL", source=event, tags=[f"status-{r['status']}"])

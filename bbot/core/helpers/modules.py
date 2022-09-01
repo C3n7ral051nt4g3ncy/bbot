@@ -24,7 +24,7 @@ class ModuleLoader:
         module_dir = Path(module_dir)
         for module_file in list_files(module_dir, filter=self.file_filter):
             if module_dir.name == "modules":
-                namespace = f"bbot.modules"
+                namespace = "bbot.modules"
             else:
                 namespace = f"bbot.modules.{module_dir.name}"
             try:
@@ -51,10 +51,9 @@ class ModuleLoader:
     def preloaded(self, type=None):
         preloaded = {}
         if type is not None:
-            preloaded = {k: v for k, v in self._preloaded.items() if self.check_type(k, type)}
+            return {k: v for k, v in self._preloaded.items() if self.check_type(k, type)}
         else:
-            preloaded = dict(self._preloaded)
-        return preloaded
+            return dict(self._preloaded)
 
     def configs(self, type=None):
         configs = {}
@@ -91,45 +90,69 @@ class ModuleLoader:
                     # class attributes that are dictionaries
                     if type(class_attr) == ast.Assign and type(class_attr.value) == ast.Dict:
                         # module options
-                        if any([target.id == "options" for target in class_attr.targets]):
-                            config.update(ast.literal_eval(class_attr.value))
+                        if any(
+                            target.id == "options" for target in class_attr.targets
+                        ):
+                            config |= ast.literal_eval(class_attr.value)
                         # module metadata
-                        if any([target.id == "meta" for target in class_attr.targets]):
+                        if any(
+                            target.id == "meta" for target in class_attr.targets
+                        ):
                             meta = ast.literal_eval(class_attr.value)
 
                     # class attributes that are lists
                     if type(class_attr) == ast.Assign and type(class_attr.value) == ast.List:
                         # flags
-                        if any([target.id == "flags" for target in class_attr.targets]):
-                            for flag in class_attr.value.elts:
-                                if type(flag.value) == str:
-                                    flags.append(flag.value)
+                        if any(
+                            target.id == "flags" for target in class_attr.targets
+                        ):
+                            flags.extend(
+                                flag.value
+                                for flag in class_attr.value.elts
+                                if type(flag.value) == str
+                            )
+
                         # watched events
-                        if any([target.id == "watched_events" for target in class_attr.targets]):
+                        if any(
+                            target.id == "watched_events"
+                            for target in class_attr.targets
+                        ):
                             for event_type in class_attr.value.elts:
                                 if type(event_type.value) == str:
                                     watched_events.append(event_type.value)
                         # produced events
-                        if any([target.id == "produced_events" for target in class_attr.targets]):
+                        if any(
+                            target.id == "produced_events"
+                            for target in class_attr.targets
+                        ):
                             for event_type in class_attr.value.elts:
                                 if type(event_type.value) == str:
                                     produced_events.append(event_type.value)
                         # python dependencies
-                        if any([target.id == "deps_pip" for target in class_attr.targets]):
+                        if any(
+                            target.id == "deps_pip"
+                            for target in class_attr.targets
+                        ):
                             for python_dep in class_attr.value.elts:
                                 if type(python_dep.value) == str:
                                     pip_deps.append(python_dep.value)
-                        # apt dependencies
-                        elif any([target.id == "deps_apt" for target in class_attr.targets]):
+                        elif any(
+                            target.id == "deps_apt"
+                            for target in class_attr.targets
+                        ):
                             for apt_dep in class_attr.value.elts:
                                 if type(apt_dep.value) == str:
                                     apt_deps.append(apt_dep.value)
-                        # bash dependencies
-                        elif any([target.id == "deps_shell" for target in class_attr.targets]):
+                        elif any(
+                            target.id == "deps_shell"
+                            for target in class_attr.targets
+                        ):
                             for shell_dep in class_attr.value.elts:
                                 shell_deps.append(ast.literal_eval(shell_dep))
-                        # ansible playbook
-                        elif any([target.id == "deps_ansible" for target in class_attr.targets]):
+                        elif any(
+                            target.id == "deps_ansible"
+                            for target in class_attr.targets
+                        ):
                             ansible_tasks = ast.literal_eval(class_attr.value)
         preloaded_data = {
             "watched_events": watched_events,
@@ -165,15 +188,19 @@ class ModuleLoader:
             value = getattr(module_variables, variable)
             with suppress(AttributeError):
                 # if it has watched_events and produced_events
-                if all(
-                    type(a) == list
-                    for a in (getattr(value, "watched_events", None), getattr(value, "produced_events", None))
+                if (
+                    all(
+                        type(a) == list
+                        for a in (
+                            getattr(value, "watched_events", None),
+                            getattr(value, "produced_events", None),
+                        )
+                    )
+                    and value.__name__.lower() == module_name.lower()
                 ):
-                    # and if its variable name matches its filename
-                    if value.__name__.lower() == module_name.lower():
-                        value._name = module_name
-                        # then we have a module
-                        return value
+                    value._name = module_name
+                    # then we have a module
+                    return value
 
     def recommend_dependencies(self, modules):
         """
@@ -185,8 +212,7 @@ class ModuleLoader:
         watched = {}
         produced = {}
         for modname in modules:
-            preloaded = self._preloaded.get(modname)
-            if preloaded:
+            if preloaded := self._preloaded.get(modname):
                 for event_type in preloaded.get("watched_events", []):
                     self.add_or_create(watched, event_type, modname)
                 for event_type in preloaded.get("produced_events", []):
@@ -215,7 +241,7 @@ class ModuleLoader:
                     with suppress(KeyError):
                         choices.remove(modname)
                     if event_type not in resolve_choices:
-                        resolve_choices[event_type] = dict()
+                        resolve_choices[event_type] = {}
                     deps = resolve_choices[event_type]
                     self.add_or_create(deps, "required_by", modname)
                     for c in choices:
@@ -226,11 +252,7 @@ class ModuleLoader:
         return resolve_choices
 
     def check_dependency(self, event_type, modname, produced):
-        if event_type not in produced:
-            return False
-        if produced[event_type] == {modname}:
-            return False
-        return True
+        return produced[event_type] != {modname} if event_type in produced else False
 
     @staticmethod
     def add_or_create(d, k, *items):

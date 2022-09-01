@@ -128,8 +128,11 @@ class telerik(BaseModule):
         if result:
             self.debug(result.text)
             if "RadAsyncUpload handler is registered succesfully" in result.text:
-                self.debug(f"Detected Telerik instance (Telerik.Web.UI.WebResource.axd?type=rau)")
-                description = f"Telerik RAU AXD Handler detected"
+                self.debug(
+                    "Detected Telerik instance (Telerik.Web.UI.WebResource.axd?type=rau)"
+                )
+
+                description = "Telerik RAU AXD Handler detected"
                 self.emit_event(
                     {"host": str(event.host), "url": f"{event.data}{webresource}", "description": description},
                     "FINDING",
@@ -178,15 +181,14 @@ class telerik(BaseModule):
 
         for dh in DialogHandlerUrls:
             result = self.test_detector(event.data, dh)
-            if result:
-                if "Cannot deserialize dialog parameters" in result.text:
-                    self.debug(f"Detected Telerik UI instance ({dh})")
-                    description = f"Telerik DialogHandler detected"
-                    self.emit_event(
-                        {"host": str(event.host), "url": f"{event.data}{dh}", "description": description},
-                        "FINDING",
-                        event,
-                    )
+            if result and "Cannot deserialize dialog parameters" in result.text:
+                self.debug(f"Detected Telerik UI instance ({dh})")
+                description = "Telerik DialogHandler detected"
+                self.emit_event(
+                    {"host": str(event.host), "url": f"{event.data}{dh}", "description": description},
+                    "FINDING",
+                    event,
+                )
 
         spellcheckhandler = "Telerik.Web.UI.SpellCheckHandler.axd"
         result = self.test_detector(event.data, spellcheckhandler)
@@ -197,8 +199,11 @@ class telerik(BaseModule):
                 validate_result = self.test_detector(event.data, self.helpers.rand_string())
                 self.debug(validate_result)
                 if validate_result.status_code != 500:
-                    self.debug(f"Detected Telerik UI instance (Telerik.Web.UI.SpellCheckHandler.axd)")
-                    description = f"Telerik SpellCheckHandler detected"
+                    self.debug(
+                        "Detected Telerik UI instance (Telerik.Web.UI.SpellCheckHandler.axd)"
+                    )
+
+                    description = "Telerik SpellCheckHandler detected"
                     self.emit_event(
                         {
                             "host": str(event.host),
@@ -214,16 +219,10 @@ class telerik(BaseModule):
     def test_detector(self, baseurl, detector):
 
         result = None
-        if "/" != baseurl[-1]:
-            url = f"{baseurl}/{detector}"
-        else:
-            url = f"{baseurl}{detector}"
+        url = f"{baseurl}/{detector}" if baseurl[-1] != "/" else f"{baseurl}{detector}"
         result = self.helpers.request(url)
         return result
 
     def filter_event(self, event):
 
-        if "endpoint" in event.tags:
-            return False
-        else:
-            return True
+        return "endpoint" not in event.tags

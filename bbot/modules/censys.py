@@ -41,7 +41,7 @@ class censys(shodan_dns):
     def query(self, query):
         emails = set()
         dns_names = set()
-        ip_addresses = dict()
+        ip_addresses = {}
         try:
             # certificates
             certificate_query = f"parsed.names: {query}"
@@ -56,7 +56,7 @@ class censys(shodan_dns):
                 if len(parsed_names) > self._cert_name_threshold:
                     _filter = lambda x: domain in str(x.lower())
                 parsed_names = list(filter(_filter, parsed_names))
-                dns_names.update(set([n.lstrip(".*").rstrip(".").lower() for n in parsed_names]))
+                dns_names.update({n.lstrip(".*").rstrip(".").lower() for n in parsed_names})
                 emails.update(set(self.helpers.extract_emails(result.get("parsed.issuer_dn", ""))))
                 emails.update(set(self.helpers.extract_emails(result.get("parsed.subject_dn", ""))))
 
@@ -64,7 +64,7 @@ class censys(shodan_dns):
             per_page = 100
             pages = max(1, int(self.max_records / per_page))
             hosts_query = f"services.tls.certificates.leaf_data.names: {query} or services.tls.certificates.leaf_data.subject.email_address: {query}"
-            for i, page in enumerate(self.hosts.search(hosts_query, per_page=per_page, pages=pages)):
+            for page in self.hosts.search(hosts_query, per_page=per_page, pages=pages):
                 for result in page:
                     ip = result.get("ip", "")
                     if not ip:

@@ -20,22 +20,20 @@ class asn(ReportModule):
         return True
 
     def filter_event(self, event):
-        if "private" in event.tags:
-            return False
-        return True
+        return "private" not in event.tags
 
     def handle_event(self, event):
-        if self.cache_get(event.host) == False:
-            asns = self.get_asn(event.host)
-            if asns:
-                for asn in asns:
-                    if asn not in self.asn_metadata:
-                        contacts = self.get_asn_metadata(asn)
-                        if not contacts:
-                            continue
-                        for c in contacts:
-                            self.emit_event(c, "EMAIL_ADDRESS", source=event)
-                        self.asn_metadata[asn] = True
+        if self.cache_get(event.host) != False:
+            return
+        if asns := self.get_asn(event.host):
+            for asn in asns:
+                if asn not in self.asn_metadata:
+                    contacts = self.get_asn_metadata(asn)
+                    if not contacts:
+                        continue
+                    for c in contacts:
+                        self.emit_event(c, "EMAIL_ADDRESS", source=event)
+                    self.asn_metadata[asn] = True
 
     def report(self):
         asn_data = sorted(self.asn_data.items(), key=lambda x: self.asn_counts[x[0]], reverse=True)
@@ -68,8 +66,7 @@ class asn(ReportModule):
         r = self.helpers.request(url, retries=5)
         try:
             j = r.json()
-            data = j.get("data", {})
-            if data:
+            if data := j.get("data", {}):
                 prefixes = data.get("prefixes", [])
                 for prefix in prefixes:
                     subnet = prefix.get("prefix", "")
@@ -78,8 +75,7 @@ class asn(ReportModule):
                     subnet = ipaddress.ip_network(subnet)
                     self.asn_data[subnet] = prefix
                     self.asn_counts[subnet] = 1
-                    asn = str(prefix.get("asn", {}).get("asn", ""))
-                    yield asn
+                    yield str(prefix.get("asn", {}).get("asn", ""))
             else:
                 self.debug(f'No results for "{ip}"')
         except Exception as e:

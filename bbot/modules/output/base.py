@@ -13,17 +13,10 @@ class BaseOutputModule(BaseModule):
     def _filter_event(self, e):
         # special "FINISHED" event
         if type(e) == str:
-            if e == "FINISHED":
-                return True
-            else:
-                return False
+            return e == "FINISHED"
         if e._omit:
             return False
-        if e._force_output:
-            return True
-        if e._internal:
-            return False
-        return True
+        return True if e._force_output else not e._internal
 
     @property
     def config(self):

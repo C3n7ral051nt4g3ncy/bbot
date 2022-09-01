@@ -20,13 +20,10 @@ class c99(shodan_dns):
         url = f"{self.base_url}/subdomainfinder?key={self.api_key}&domain={self.helpers.quote(query)}&json"
         results = self.helpers.request(url)
         try:
-            json = results.json()
-            if json:
-                subdomains = json.get("subdomains", [])
-                if subdomains:
+            if json := results.json():
+                if subdomains := json.get("subdomains", []):
                     for s in subdomains:
-                        subdomain = s.get("subdomain", "")
-                        if subdomain:
+                        if subdomain := s.get("subdomain", ""):
                             yield subdomain
             else:
                 self.debug(f'No results for "{query}"')

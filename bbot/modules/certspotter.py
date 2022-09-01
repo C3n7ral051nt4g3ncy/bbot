@@ -14,8 +14,7 @@ class certspotter(crobat):
         return self.helpers.request(url)
 
     def parse_results(self, r, query):
-        json = r.json()
-        if json:
+        if json := r.json():
             for r in json:
                 for dns_name in r.get("dns_names", []):
                     yield dns_name.lstrip(".*").rstrip(".")

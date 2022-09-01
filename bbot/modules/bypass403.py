@@ -65,8 +65,10 @@ for qp in query_payloads:
     if "?" not in qp:  # we only want to use "?" after the path
         signatures.append(("GET", "{scheme}://{netloc}/%s/{path}" % qp, None, True))
 
-for hp_key in header_payloads.keys():
-    signatures.append(("GET", "{scheme}://{netloc}/{path}", {hp_key: header_payloads[hp_key]}, False))
+signatures.extend(
+    ("GET", "{scheme}://{netloc}/{path}", {hp_key: value}, False)
+    for hp_key, value in header_payloads.items()
+)
 
 
 class bypass403(BaseModule):
@@ -88,10 +90,7 @@ class bypass403(BaseModule):
         for sig in signatures:
 
             sig = self.format_signature(sig, event)
-            if sig[2] != None:
-                headers = dict(sig[2])
-            else:
-                headers = None
+            headers = dict(sig[2]) if sig[2] != None else None
             match, reason, reflection, subject_response = compare_helper.compare(
                 sig[1], headers=headers, method=sig[0], allow_redirects=True
             )
@@ -112,9 +111,7 @@ class bypass403(BaseModule):
                     self.debug(f"Status code changed to {str(subject_response.status_code)}, ignoring")
 
     def filter_event(self, event):
-        if ("status-403" in event.tags) or ("status-401" in event.tags):
-            return True
-        return False
+        return "status-403" in event.tags or "status-401" in event.tags
 
     def format_signature(self, sig, event):
         if sig[3] == True:
